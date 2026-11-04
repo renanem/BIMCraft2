@@ -1853,6 +1853,38 @@ pub static ALL: &[Command] = &[
         reservoir_size,
     ),
     other(
+        "extinguisher_size",
+        "Check Fire Extinguishers",
+        "{risk: low|medium|high, kind?: portable|wheeled, area?, subdivisions?, units?: {a, bc, abc: count}, walk?, entrance?, \
+         specific?: [boiler, pump, power, machine, transmission, incinerator, lift, escalator, panel, transformer, telephony, \
+         flammables, pyrophoric, kitchen]} fire extinguishers as IT 21/2025 of the CBPMESP (São Paulo) asks. The standard fixes no \
+         count for an area: it fixes how far one may be from any point (`max_walk_m`: 25, 20 and 15 m by the `risk`, half as far again \
+         for a `wheeled` unit), the fewest units a floor has (`min_units`: two, one for class A and one for B and C or two of ABC \
+         powder; a single ABC powder when the floor's `area` (m²) is under 50; two in each of the `subdivisions` with no passage), the \
+         least `capacity` of each agent, and the risks protected whatever the general protection (`specific`). Checks, each of one \
+         kind: `walk` (m, the farthest an operator goes to a unit), `units` (those a floor, or one subdivision, has, by class), \
+         `entrance` (m, the nearest unit to the main entrance, 5 at most). An input not given leaves its check `pending` and never \
+         stops the others; `ok` is that none failed. The risk class is yours: IT 14's fire load decides it. It leaves out where a unit \
+         stands, its mounting and the signs (IT 20). Not for a single-family house. It changes nothing",
+        extinguisher_size,
+    ),
+    other(
+        "emergency_light",
+        "Check Emergency Lighting",
+        "{surface?: level|level_change, lux?, lux_max?, autonomy?, spacing?, wall?, lumens?, height?, mounting?: ceiling|wall, area?, \
+         population?, direct_exit?, fire_load?, voltage?, existing?, rcd?, occupancy?, capacity?, enclosed?, generator?, \
+         switch_time?, length?, room?: {width, depth}} emergency lighting as IT 18/2025 of the CBPMESP (São Paulo) asks, with the parts \
+         of NBR 10898 it adopts. Checks, each of one kind: `lux` on the floor (3 on level ground, 5 on stairs and where the floor has \
+         obstacles: `surface`), `ratio` of `lux_max` to `lux` (under 20:1), `autonomy` (h, 2 at least), `spacing` and `wall` (m: points \
+         15 m apart and 7.5 m from a wall at most), `table_a1` (the luminaire's `lumens` and mounting `height` (m) against NBR 10898's \
+         Tabela A.1), the `voltage` (30 V at most in an area with `fire_load`, or an `existing` installation with its 30 mA `rcd`), the \
+         `exemption` of a room of `area` 50 m² or less and under 50 `population` with a `direct_exit`, the beacons over the exits of a \
+         closed room (`enclosed`) of more than 100 `capacity` in an `occupancy` F-3, F-5, F-6, F-7, F-10 or F-11, and a `generator`'s \
+         `switch_time`. `length` of a corridor or a `room` gives the points the 15 m rule takes. An input not given leaves its check \
+         `pending` and never stops the others; `ok` is that none failed. It is not the photometric study. It changes nothing",
+        emergency_light,
+    ),
+    other(
         "storm_size",
         "Size a Storm Drain",
         "{kind: downpipe|horizontal, area?, rainfall?, flow?, outlet?: edge|funnel, gutter?, length?, slope?, inside?} a storm drain as \
@@ -5063,7 +5095,8 @@ fn water_size(_: &mut Session, p: &Value) -> R {
 }
 
 fn reservoir_size(_: &mut Session, p: &Value) -> R {
-    use crate::reservoir::{self, Input, Kind, Status};
+    use crate::checks::{self, Kind};
+    use crate::reservoir::{self, Input};
     let c = "reservoir_size";
     let o = p.as_object().ok_or_else(|| bad(c, "params must be an object"))?;
     const KEYS: &[&str] = &[
@@ -5129,7 +5162,6 @@ fn reservoir_size(_: &mut Session, p: &Value) -> R {
     };
     let r = reservoir::size(&input);
     let round = |x: f64, k: f64| (x * k).round() / k + 0.0;
-    let pending: Vec<&str> = r.checks.iter().filter(|k| k.status == Status::Pending).map(|k| k.id).collect();
     Ok(json!({
         "daily_consumption_l": round(daily_l, 100.0),
         "consumption": {
@@ -5158,17 +5190,198 @@ fn reservoir_size(_: &mut Session, p: &Value) -> R {
             "lower_percent": r.suggested_lower_percent,
             "note": "the usual share, a common practice and not a requirement; give `lower_percent` to choose",
         },
-        "checks": r.checks.iter().map(|k| json!({
-            "id": k.id,
-            "kind": k.kind.name(),
-            "status": k.status.name(),
-            "text": k.text,
-            "source": k.source,
-        })).collect::<Vec<_>>(),
-        "pending": pending,
-        "ok": r.checks.iter().all(|k| k.status != Status::Fail),
+        "checks": checks::to_json(&r.checks),
+        "pending": checks::pending(&r.checks),
+        "ok": checks::none_failed(&r.checks),
         "ok_covers": "the checks that could be made: none failed; `pending` lists what an input not given left open",
         "not_covered": "the pump's head and power, the recalque pipe (Forchheimer is not the standard's and is not offered here), the fire reserve's own rules and the consumption per person",
+    }))
+}
+
+fn extinguisher_size(_: &mut Session, p: &Value) -> R {
+    use crate::checks;
+    use crate::extinguisher::{self, AGENTS, Input, Risk, SPECIFIC, Units};
+    let c = "extinguisher_size";
+    let o = p.as_object().ok_or_else(|| bad(c, "params must be an object"))?;
+    const KEYS: &[&str] = &["risk", "kind", "area", "subdivisions", "units", "walk", "entrance", "specific"];
+    if let Some(key) = o.keys().find(|k| !KEYS.contains(&k.as_str())) {
+        return Err(bad(c, format!("unknown parameter `{key}`")));
+    }
+    let risk = Risk::parse(choice(c, p, "risk", &["low", "medium", "high"], "")?)
+        .ok_or_else(|| bad(c, "`risk` (low, medium or high) is required: IT 14's fire load decides it"))?;
+    let wheeled = choice(c, p, "kind", &["portable", "wheeled"], "portable")? == "wheeled";
+    let optional = |key: &str, hi: f64| -> Result<Option<f64>, String> {
+        if absent(p.get(key)) { Ok(None) } else { within(c, p, key, 0.0, 0.0, hi).map(Some) }
+    };
+    let count = |key: &str, v: &Value, hi: f64| -> Result<u32, String> {
+        v.as_f64()
+            .filter(|n| n.is_finite() && *n >= 0.0 && *n <= hi && n.fract() == 0.0)
+            .map(|n| n as u32)
+            .ok_or_else(|| bad(c, format!("`{key}` must be a whole number from 0 to {hi}, got {v}")))
+    };
+    let subdivisions = match p.get("subdivisions") {
+        v if absent(v) => 1,
+        Some(v) => {
+            count("subdivisions", v, 1000.0).and_then(|n| if n == 0 { Err(bad(c, "`subdivisions` must be 1 or more")) } else { Ok(n) })?
+        }
+        None => 1,
+    };
+    let units = match p.get("units") {
+        v if absent(v) => None,
+        Some(Value::Object(u)) => {
+            if let Some(key) = u.keys().find(|k| !["a", "bc", "abc"].contains(&k.as_str())) {
+                return Err(bad(c, format!("`units`: no class `{key}`, use a, bc, abc")));
+            }
+            let get = |k: &str| u.get(k).map_or(Ok(0), |v| count("units", v, 10_000.0));
+            Some(Units { a: get("a")?, bc: get("bc")?, abc: get("abc")? })
+        }
+        Some(v) => return Err(bad(c, format!("`units` must be an object {{a, bc, abc}}, got {v}"))),
+        None => None,
+    };
+    let specific = match p.get("specific") {
+        v if absent(v) => Vec::new(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .map(|v| {
+                v.as_str().and_then(extinguisher::parse_specific).map(str::to_string).ok_or_else(|| {
+                    bad(
+                        c,
+                        format!(
+                            "`specific`: {v} is not a risk of item 4.2.1.12, use {}",
+                            SPECIFIC.iter().map(|r| r.0).collect::<Vec<_>>().join(", ")
+                        ),
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(v) => return Err(bad(c, format!("`specific` must be a list, got {v}"))),
+        None => Vec::new(),
+    };
+    let input = Input {
+        risk,
+        wheeled,
+        area: optional("area", 1.0e7)?,
+        subdivisions,
+        units,
+        walk: optional("walk", 1.0e5)?,
+        entrance: optional("entrance", 1.0e5)?,
+        specific,
+    };
+    let r = extinguisher::size(&input);
+    let capacity: serde_json::Map<String, Value> =
+        AGENTS.iter().map(|(name, a)| (name.to_string(), json!(extinguisher::capacity(*a, wheeled)))).collect();
+    Ok(json!({
+        "kind": if wheeled { "wheeled" } else { "portable" },
+        "max_walk_m": r.max_walk_m,
+        "min_units": r.min_units,
+        "capacity": capacity,
+        "checks": checks::to_json(&r.checks),
+        "pending": checks::pending(&r.checks),
+        "ok": checks::none_failed(&r.checks),
+        "ok_covers": "the checks that could be made: none failed; `pending` lists what an input not given left open",
+        "not_covered": "where each unit stands, its mounting height and signs (IT 20), the specific risks' own instructions (flammable liquids, LPG, natural gas, container yards, helipads) and a risk class, which IT 14's fire load gives",
+    }))
+}
+
+fn emergency_light(_: &mut Session, p: &Value) -> R {
+    use crate::checks;
+    use crate::emergency::{self, Input};
+    let c = "emergency_light";
+    let o = p.as_object().ok_or_else(|| bad(c, "params must be an object"))?;
+    const KEYS: &[&str] = &[
+        "surface",
+        "lux",
+        "lux_max",
+        "autonomy",
+        "spacing",
+        "wall",
+        "lumens",
+        "height",
+        "mounting",
+        "area",
+        "population",
+        "direct_exit",
+        "fire_load",
+        "voltage",
+        "existing",
+        "rcd",
+        "occupancy",
+        "capacity",
+        "enclosed",
+        "generator",
+        "switch_time",
+        "length",
+        "room",
+    ];
+    if let Some(key) = o.keys().find(|k| !KEYS.contains(&k.as_str())) {
+        return Err(bad(c, format!("unknown parameter `{key}`")));
+    }
+    let optional = |key: &str, hi: f64| -> Result<Option<f64>, String> {
+        if absent(p.get(key)) { Ok(None) } else { within(c, p, key, 0.0, f64::MIN_POSITIVE, hi).map(Some) }
+    };
+    let room = match p.get("room") {
+        v if absent(v) => None,
+        Some(Value::Object(r)) => {
+            if let Some(key) = r.keys().find(|k| !["width", "depth"].contains(&k.as_str())) {
+                return Err(bad(c, format!("`room`: no key `{key}`, use width and depth")));
+            }
+            let side = |k: &str| {
+                r.get(k)
+                    .and_then(Value::as_f64)
+                    .filter(|n| n.is_finite() && *n > 0.0 && *n <= 1.0e4)
+                    .ok_or_else(|| bad(c, format!("`room`: `{k}` (m) must be a number above 0 and at most 10000")))
+            };
+            Some((side("width")?, side("depth")?))
+        }
+        Some(v) => return Err(bad(c, format!("`room` must be an object {{width, depth}}, got {v}"))),
+        None => None,
+    };
+    let length = optional("length", 1.0e5)?;
+    if length.is_some() && room.is_some() {
+        return Err(bad(c, "`length` and `room` are two ways to ask for the points: give one"));
+    }
+    let occupancy = match p.get("occupancy") {
+        v if absent(v) => None,
+        Some(Value::String(s)) if s.chars().count() <= 8 => Some(s.clone()),
+        Some(v) => return Err(bad(c, format!("`occupancy` must be text such as F-3, got {v}"))),
+        None => None,
+    };
+    let input = Input {
+        level_change: choice(c, p, "surface", &["level", "level_change"], "level")? == "level_change",
+        lux: optional("lux", 1.0e6)?,
+        lux_max: optional("lux_max", 1.0e7)?,
+        autonomy_h: optional("autonomy", 1000.0)?,
+        spacing: optional("spacing", 1.0e4)?,
+        wall: optional("wall", 1.0e4)?,
+        lumens: optional("lumens", 1.0e6)?,
+        height: optional("height", 1000.0)?,
+        ceiling: choice(c, p, "mounting", &["ceiling", "wall"], "ceiling")? == "ceiling",
+        area: optional("area", 1.0e7)?,
+        population: optional("population", 1.0e6)?,
+        direct_exit: flag(c, p, "direct_exit")?,
+        fire_load: flag(c, p, "fire_load")?,
+        voltage: optional("voltage", 1.0e5)?,
+        existing: flag(c, p, "existing")?,
+        rcd: flag(c, p, "rcd")?,
+        occupancy,
+        capacity: optional("capacity", 1.0e6)?,
+        enclosed: flag(c, p, "enclosed")?,
+        generator: flag(c, p, "generator")?,
+        switch_time: optional("switch_time", 1.0e5)?,
+        length,
+        room,
+    };
+    let r = emergency::check_all(&input);
+    Ok(json!({
+        "min_lux": r.min_lux,
+        "exempt": r.exempt,
+        "points": r.points,
+        "table_a1": r.table.map(|(end, gap)| json!({"wall_m": end, "spacing_m": gap})),
+        "checks": checks::to_json(&r.checks),
+        "pending": checks::pending(&r.checks),
+        "ok": checks::none_failed(&r.checks),
+        "ok_covers": "the checks that could be made: none failed; `pending` lists what an input not given left open",
+        "not_covered": "the photometric study, the voltage limits and the switchover time of NBR 10898, and the fire brigade's own acceptance of the equipment",
     }))
 }
 

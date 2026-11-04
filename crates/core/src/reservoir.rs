@@ -28,53 +28,9 @@ pub const MIN_COMPARTMENTS: u32 = 2;
 /// The share of the potable volume the lower reservoir usually takes, per cent: an engineering practice, never the standard's.
 pub const USUAL_LOWER_PERCENT: f64 = 60.0;
 
+use crate::checks::{Check, Kind, Status, verdict};
+
 const STANDARD: &str = "NBR 5626:2020, reservation, as read from its text";
-
-/// What a check rests on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind {
-    Requirement,
-    Historical,
-    Practice,
-    Assumption,
-}
-
-impl Kind {
-    pub fn name(self) -> &'static str {
-        match self {
-            Kind::Requirement => "current requirement",
-            Kind::Historical => "historical reference",
-            Kind::Practice => "engineering practice",
-            Kind::Assumption => "configurable assumption",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Status {
-    Ok,
-    Fail,
-    Pending,
-}
-
-impl Status {
-    pub fn name(self) -> &'static str {
-        match self {
-            Status::Ok => "ok",
-            Status::Fail => "fail",
-            Status::Pending => "pending",
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Check {
-    pub id: &'static str,
-    pub kind: Kind,
-    pub status: Status,
-    pub text: String,
-    pub source: &'static str,
-}
 
 #[derive(Clone, Debug)]
 pub struct Input {
@@ -117,10 +73,6 @@ pub struct Outcome {
 
 fn check(id: &'static str, status: Status, text: impl Into<String>) -> Check {
     Check { id, kind: Kind::Requirement, status, text: text.into(), source: STANDARD }
-}
-
-fn verdict(ok: bool) -> Status {
-    if ok { Status::Ok } else { Status::Fail }
 }
 
 /// Sizes the reservation of `i` and checks it: the volumes, the refill flow and the checks of the standard it can make.

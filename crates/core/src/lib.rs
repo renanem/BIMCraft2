@@ -14,6 +14,7 @@ pub mod bridge;
 pub mod cad;
 #[cfg(test)]
 mod cad_tests;
+pub mod checks;
 pub mod cloud;
 #[cfg(test)]
 mod cloud_tests;
@@ -33,7 +34,9 @@ mod eberick_tests;
 pub mod electrical;
 #[cfg(test)]
 mod electrical_tests;
+pub mod emergency;
 pub mod engine;
+pub mod extinguisher;
 pub mod falls;
 pub mod family;
 pub mod favorites;
