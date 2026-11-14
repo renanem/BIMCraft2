@@ -178,6 +178,7 @@ fn main() -> ExitCode {
         app.show_start_page();
     }
     app.revit = revit_reader();
+    app.revit_family = revit_family_reader();
     if let Some(file) = later {
         app.open_later(file);
     }
@@ -340,6 +341,21 @@ fn revit_reader() -> Option<Importer> {
     None
 }
 
+/// The reader of Revit family files the window is given, behind the same feature: a family's types and their parameters,
+/// as the `family` command takes them, and the notes of what the file did not give.
+#[cfg(feature = "rvt")]
+fn revit_family_reader() -> Option<bimcraft_ui_egui::revit_family::FamilyReader> {
+    use bimcraft_ui_egui::revit_family::FamilyRead;
+    Some(std::sync::Arc::new(|path: &Path| {
+        bimcraft_rvt::family_path(path).map(|read| FamilyRead { name: read.name, family: read.family, notes: read.notes })
+    }))
+}
+
+#[cfg(not(feature = "rvt"))]
+fn revit_family_reader() -> Option<bimcraft_ui_egui::revit_family::FamilyReader> {
+    None
+}
+
 /// Finder, the Dock and Open With hand macOS apps their files, and the Dock its Quit, as Apple events,
 /// not as arguments: the app reads them each frame, and one arriving wakes it.
 #[cfg(target_os = "macos")]
@@ -374,6 +390,27 @@ mod tests {
         let read = revit_reader().expect("a build with the feature has a reader");
         let imported = read(&file).unwrap();
         assert_eq!((imported.model.name.as_str(), imported.schema.as_str()), ("Barn House", "Revit 2024"));
+        // A file that is not Revit's is refused, in words, not a panic.
+        std::fs::write(&file, b"not a Revit file").unwrap();
+        assert!(read(&file).is_err());
+        let _ = std::fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn the_family_reader_the_window_is_given_reads_a_revit_family_and_what_it_gives_loads() {
+        use bimcraft_rvt::fixture::{Basic, basic_file_info, container};
+        let path = std::env::temp_dir().join(format!("bimcraft-desktop-rfa-{}", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        let file = path.join("Stool.rfa");
+        let atom = br#"<?xml version="1.0" encoding="UTF-8"?><entry xmlns="http://www.w3.org/2005/Atom" xmlns:A="urn:schemas-autodesk-com:partatom"><title>0</title><category><term>Furniture</term></category><A:family type="user"><A:part type="user"><title>Low</title><Seat type="custom" typeOfParameter="Length" units="mm">450</Seat></A:part></A:family></entry>"#;
+        std::fs::write(&file, container(&[("BasicFileInfo", &basic_file_info(&Basic::default())), ("PartAtom", atom)])).unwrap();
+        let read = revit_family_reader().expect("a build with the feature has a reader");
+        let family = read(&file).unwrap();
+        assert_eq!((family.name.as_str(), family.family["category"].as_str()), ("Stool", Some("furniture")));
+        assert!(family.notes[0].starts_with("1 type and 1 parameter read"), "{:?}", family.notes);
+        let mut s = bimcraft_core::engine::Session::new();
+        s.execute("family", &family.family).unwrap();
+        assert_eq!(s.model.families["Stool"].types["Low"]["Seat"], 450.0);
         // A file that is not Revit's is refused, in words, not a panic.
         std::fs::write(&file, b"not a Revit file").unwrap();
         assert!(read(&file).is_err());

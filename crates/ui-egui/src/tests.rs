@@ -6317,6 +6317,7 @@ mod purge;
 mod qol;
 mod reinforce;
 mod revit;
+mod revit_family;
 mod rooms;
 mod section_box;
 mod shape3d;

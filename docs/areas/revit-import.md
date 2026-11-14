@@ -104,6 +104,18 @@ back with `family {"name": …}`, place it with `component` and list it with `el
 test -p bimcraft-rvt family:: -- --nocapture` reads every `.rfa` under the folders (a Revit installation's library, read in
 place), loads each through the `family` command and tallies the notes.
 
+On the desktop it is Insert > Revit Family (`crates/ui-egui/src/revit_family.rs`), there only when the window has a reader:
+`BimApp::revit_family: Option<FamilyReader>`, which `apps/bimcraft`'s `main` fills with `bimcraft_rvt::family_path` under the
+`rvt` feature, so the window never depends on the reader and a test's reader is a closure. The button asks for a `.rfa`,
+`import_revit_family` reads it at once behind `catch_unwind` (the entry is at most a mebibyte, so no thread; a refusal or a
+panic is a status message) and the screen Import Revit Family shows it before anything changes: the file, the name (a field:
+one the project has already, or none, greys Import and says so), the category, the types, a row for each parameter (name,
+data type, the value of the first type in the project's units, Shared with the GUID as its tip) and every note. Copy Report
+puts `FamilyBox::text` on the clipboard. Import is one `family` command, one undo step, after which the Component tool holds
+the family and its first type and the status box says how many types and parameters came in; what the command refuses stays
+on the screen in red. `BIMCRAFT_REVIT_FAMILY_DUMP=<folder> cargo test -p bimcraft-ui-egui revit_family_screenshots` writes the
+screen light and dark, and with a name already taken.
+
 ## Revit family library exchange and project templates (fork)
 
 The desktop also offers `.rte` project templates through the existing project importer. These open as unsaved projects, with an explicit report note: unused definitions and template settings are not reconstructed. A binary `.rfa`/`.rft` file is not opened as a project: its types and parameters load as a family (above), and its geometry comes through the public-API [family library bridge](../../tools/revit_bridge/README.md). It exports per-type mesh snapshots and a self-contained native command script, not parametric constraints or an entire template. No Autodesk assets are bundled. The API exporter still needs validation in Revit; converter tests use synthetic geometry.

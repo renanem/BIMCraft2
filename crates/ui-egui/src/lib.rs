@@ -73,6 +73,7 @@ mod reinforce;
 mod renames;
 mod retained;
 pub mod revit;
+pub mod revit_family;
 mod ribbon;
 mod script;
 mod section;
@@ -983,6 +984,10 @@ pub struct BimApp {
     /// The reader of Revit files, which the desktop app attaches (`bimcraft-rvt` is Apache-2.0 only, so this crate never depends on
     /// it): a window starts without one, so it offers no `.rvt` and a test never reads a real one.
     pub revit: Option<revit::Importer>,
+    /// The reader of Revit family files, attached the same way: without one, Insert has no Revit Family button.
+    pub revit_family: Option<revit_family::FamilyReader>,
+    /// Import Revit Family, while it is up: the family read, shown before it joins the project.
+    pub(crate) revit_family_box: Option<revit_family::FamilyBox>,
     /// The control port, when the window was started with one or Settings opened it: agents work on this project through it.
     control: Option<control::Control>,
     /// File > Settings > Agents: whether the window opens the port, on which, and whether agents may edit or only read.
@@ -1706,6 +1711,8 @@ impl BimApp {
             assistant: assistant::State::default(),
             space_mouse: None,
             revit: None,
+            revit_family: None,
+            revit_family_box: None,
             control: None,
             agents: control::Agents::default(),
             cowork: None,
@@ -2321,6 +2328,7 @@ impl BimApp {
             || self.installing()
             || self.importing()
             || self.report_open()
+            || self.revit_family_open()
             || self.export_dialog.as_ref().is_some_and(|d| !d.picking)
             // An open menu takes the keys: Esc closes it, not the tool.
             || egui::Popup::is_any_open(ctx)
@@ -3811,6 +3819,7 @@ impl BimApp {
         (fresh.settings_path, fresh.settings_kept) = (self.settings_path.take(), self.settings_kept.take());
         fresh.window = std::mem::take(&mut self.window);
         (fresh.updates, fresh.revit) = (self.updates.take(), self.revit.take());
+        fresh.revit_family = self.revit_family.take();
         // The assistant's network and the user's choices are the window's, not the project's: its conversation ends with the project.
         fresh.assistant = std::mem::take(&mut self.assistant);
         fresh.assistant.project_replaced();
@@ -4900,6 +4909,15 @@ impl BimApp {
             );
             if big_button(ui, Icon::Component, "Import 3D Model", false, tip).clicked() {
                 self.import_mesh_dialog(ui.ctx());
+            }
+            // Only with the reader the desktop app attaches: a build without Revit support has no button.
+            if self.revit_family.is_some() {
+                let tip = msg!(
+                    "Revit Family: a .rfa file's types and their parameters brought into the project as a family, after a look at what the file gives and what it does not"
+                );
+                if big_button(ui, Icon::LoadFamily, "Revit Family", self.revit_family_box.is_some(), tip).clicked() {
+                    self.revit_family_dialog(ui.ctx());
+                }
             }
         });
     }
@@ -6365,6 +6383,7 @@ impl BimApp {
         self.importing_box(ctx);
         self.opening_box(ctx);
         self.report_window(ctx);
+        self.revit_family_window(ctx);
         self.export_window(ctx);
         self.publisher_window(ctx);
         self.print_sets_window(ctx);
