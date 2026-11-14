@@ -64,15 +64,15 @@ msgstr ""
 msgid "1 page"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:239
+#: crates/ui-egui/src/revit_family.rs:241
 msgid "1 parameter"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:238
+#: crates/ui-egui/src/revit_family.rs:240
 msgid "1 type"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:114
+#: crates/ui-egui/src/revit_family.rs:115
 msgid "1 type: {}"
 msgstr ""
 
@@ -225,7 +225,7 @@ msgstr "Cửa đi hoặc cửa sổ nằm trong tường của nó: không thể
 msgid "A family file, to edit."
 msgstr "Một tệp họ để chỉnh sửa."
 
-#: crates/ui-egui/src/revit_family.rs:147
+#: crates/ui-egui/src/revit_family.rs:148
 msgid "A family needs a name."
 msgstr ""
 
@@ -726,7 +726,7 @@ msgid "Air Terminal (AT): a captor, where you click on the roof; Space turns it"
 msgstr "Kim thu sét (AT): một kim thu, tại chỗ bạn nhấp trên mái; Space để xoay"
 
 #: crates/ui-egui/src/editor.rs:945
-#: crates/ui-egui/src/revit_family.rs:74
+#: crates/ui-egui/src/revit_family.rs:75
 msgid "Air Terminals"
 msgstr "Kim thu sét"
 
@@ -955,7 +955,7 @@ msgstr "Và:"
 #: crates/ui-egui/src/parameters.rs:34
 #: crates/ui-egui/src/parameters.rs:47
 #: crates/ui-egui/src/reinforce.rs:83
-#: crates/ui-egui/src/revit_family.rs:51
+#: crates/ui-egui/src/revit_family.rs:52
 msgid "Angle"
 msgstr "Góc"
 
@@ -1120,7 +1120,7 @@ msgstr ""
 #: crates/core/src/schedule.rs:244
 #: crates/ui-egui/src/editor.rs:268
 #: crates/ui-egui/src/parameters.rs:32
-#: crates/ui-egui/src/revit_family.rs:52
+#: crates/ui-egui/src/revit_family.rs:53
 msgid "Area"
 msgstr "Diện tích"
 
@@ -1798,7 +1798,7 @@ msgstr "Camera: nhấp chỗ đặt mắt nhìn, rồi chỗ nó nhìn tới: m�
 #: crates/ui-egui/src/publisher.rs:967
 #: crates/ui-egui/src/purge.rs:77
 #: crates/ui-egui/src/reinforce.rs:536
-#: crates/ui-egui/src/revit_family.rs:312
+#: crates/ui-egui/src/revit_family.rs:314
 #: crates/ui-egui/src/shortcuts.rs:412
 #: crates/ui-egui/src/shortcuts.rs:540
 #: crates/ui-egui/src/standards.rs:334
@@ -1859,7 +1859,7 @@ msgid "Casement Window"
 msgstr "Cửa sổ mở quay"
 
 #: crates/ui-egui/src/editor.rs:937
-#: crates/ui-egui/src/revit_family.rs:66
+#: crates/ui-egui/src/revit_family.rs:67
 msgid "Casework"
 msgstr "Tủ kệ"
 
@@ -3231,7 +3231,7 @@ msgstr ""
 
 #: crates/ui-egui/src/plugins.rs:255
 #: crates/ui-egui/src/revit.rs:262
-#: crates/ui-egui/src/revit_family.rs:314
+#: crates/ui-egui/src/revit_family.rs:316
 msgid "Copied"
 msgstr "Đã sao chép"
 
@@ -3305,7 +3305,7 @@ msgid "Copy IFC GlobalIds"
 msgstr "Sao chép IFC GlobalId"
 
 #: crates/ui-egui/src/revit.rs:262
-#: crates/ui-egui/src/revit_family.rs:314
+#: crates/ui-egui/src/revit_family.rs:316
 msgid "Copy Report"
 msgstr "Sao chép báo cáo"
 
@@ -3382,7 +3382,7 @@ msgstr "Không thể mở {}: {}"
 msgid "Couldn't print: {}"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:210
+#: crates/ui-egui/src/revit_family.rs:212
 msgid "Couldn't read {}: {}"
 msgstr ""
 
@@ -3672,7 +3672,7 @@ msgstr "Đầu nối dữ liệu"
 msgid "Data Connector: where a data cable meets the family"
 msgstr "Đầu nối dữ liệu: nơi cáp dữ liệu gặp họ"
 
-#: crates/ui-egui/src/revit_family.rs:75
+#: crates/ui-egui/src/revit_family.rs:76
 msgid "Data Devices"
 msgstr ""
 
@@ -3688,7 +3688,7 @@ msgstr "Ổ cắm dữ liệu (DT): một điểm dữ liệu, tại chỗ bạn
 msgid "Data Outlets"
 msgstr "Ổ cắm dữ liệu"
 
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 msgid "Data Type"
 msgstr ""
 
@@ -4285,7 +4285,7 @@ msgstr "Cửa đi (DR): nhấp vào một tường"
 msgid "Door Schedule"
 msgstr "Bảng thống kê cửa đi"
 
-#: crates/ui-egui/src/revit_family.rs:77
+#: crates/ui-egui/src/revit_family.rs:78
 msgid "Doors"
 msgstr ""
 
@@ -4736,7 +4736,7 @@ msgid "Electrical Ceiling"
 msgstr "Điện trần"
 
 #: crates/ui-egui/src/editor.rs:942
-#: crates/ui-egui/src/revit_family.rs:70
+#: crates/ui-egui/src/revit_family.rs:71
 msgid "Electrical Equipment"
 msgstr "Thiết bị điện"
 
@@ -4744,7 +4744,7 @@ msgstr "Thiết bị điện"
 msgid "Electrical Equipment (EE): a distribution board, where you click on the wall; Space turns it"
 msgstr "Thiết bị điện (EE): một tủ điện phân phối, tại chỗ bạn nhấp trên tường; Space để xoay"
 
-#: crates/ui-egui/src/revit_family.rs:71
+#: crates/ui-egui/src/revit_family.rs:72
 msgid "Electrical Fixtures"
 msgstr ""
 
@@ -5144,7 +5144,7 @@ msgid "Family Parameters"
 msgstr "Tham số họ"
 
 #: crates/ui-egui/src/editor.rs:271
-#: crates/ui-egui/src/revit_family.rs:57
+#: crates/ui-egui/src/revit_family.rs:58
 msgid "Family Type"
 msgstr ""
 
@@ -5725,7 +5725,7 @@ msgid "Function"
 msgstr "Chức năng"
 
 #: crates/ui-egui/src/editor.rs:936
-#: crates/ui-egui/src/revit_family.rs:65
+#: crates/ui-egui/src/revit_family.rs:66
 msgid "Furniture"
 msgstr "Nội thất"
 
@@ -5769,7 +5769,7 @@ msgstr "Van cổng"
 msgid "Generic"
 msgstr "Chung"
 
-#: crates/ui-egui/src/revit_family.rs:79
+#: crates/ui-egui/src/revit_family.rs:80
 msgid "Generic Models"
 msgstr ""
 
@@ -6190,7 +6190,7 @@ msgstr ""
 #: crates/ui-egui/src/editor/document.rs:582
 #: crates/ui-egui/src/lib.rs:4900
 #: crates/ui-egui/src/parameters.rs:1128
-#: crates/ui-egui/src/revit_family.rs:313
+#: crates/ui-egui/src/revit_family.rs:315
 msgid "Import"
 msgstr "Nhập"
 
@@ -6215,7 +6215,7 @@ msgstr "Nhập CAD: đưa một bản vẽ DWG hoặc DXF vào dự án, vẽ b�
 msgid "Import DXF…"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:263
+#: crates/ui-egui/src/revit_family.rs:265
 msgid "Import Revit Family"
 msgstr ""
 
@@ -6250,7 +6250,7 @@ msgstr "Danh mục được nhập"
 msgid "Imported from this file"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:234
+#: crates/ui-egui/src/revit_family.rs:236
 msgid "Imported the family {} from {}: {}, {}."
 msgstr ""
 
@@ -6414,7 +6414,7 @@ msgstr "Lớp cách nhiệt: vật liệu cách nhiệt dạng tấm vẽ dọc 
 
 #: crates/ui-egui/src/editor.rs:267
 #: crates/ui-egui/src/parameters.rs:30
-#: crates/ui-egui/src/revit_family.rs:50
+#: crates/ui-egui/src/revit_family.rs:51
 msgid "Integer"
 msgstr ""
 
@@ -6802,7 +6802,7 @@ msgstr "Cho mượn khóa AI của bạn?"
 #: crates/ui-egui/src/linestyles/creator.rs:149
 #: crates/ui-egui/src/parameters.rs:31
 #: crates/ui-egui/src/parameters.rs:45
-#: crates/ui-egui/src/revit_family.rs:48
+#: crates/ui-egui/src/revit_family.rs:49
 msgid "Length"
 msgstr "Chiều dài"
 
@@ -6882,7 +6882,7 @@ msgstr "Sáng"
 msgid "Lighting"
 msgstr "Chiếu sáng"
 
-#: crates/ui-egui/src/revit_family.rs:72
+#: crates/ui-egui/src/revit_family.rs:73
 msgid "Lighting Devices"
 msgstr ""
 
@@ -6894,7 +6894,7 @@ msgstr "Thiết bị chiếu sáng"
 msgid "Lighting Fixture (LF): a luminaire, where you click, hung from the slab; Space turns it"
 msgstr "Thiết bị chiếu sáng (LF): một bộ đèn, tại chỗ bạn nhấp, treo từ sàn; Space để xoay"
 
-#: crates/ui-egui/src/revit_family.rs:73
+#: crates/ui-egui/src/revit_family.rs:74
 msgid "Lighting Fixtures"
 msgstr ""
 
@@ -7507,7 +7507,7 @@ msgstr "Đã sao chép thuộc tính: áp dụng kiểu “{}” cho {} cấu ki
 #: crates/ui-egui/src/properties.rs:2815
 #: crates/ui-egui/src/properties.rs:2956
 #: crates/ui-egui/src/properties.rs:3148
-#: crates/ui-egui/src/revit_family.rs:55
+#: crates/ui-egui/src/revit_family.rs:56
 msgid "Material"
 msgstr "Vật liệu"
 
@@ -8070,7 +8070,7 @@ msgstr "KHÔNG KHÉP KÍN"
 #: crates/ui-egui/src/properties.rs:2486
 #: crates/ui-egui/src/properties.rs:2970
 #: crates/ui-egui/src/properties.rs:3863
-#: crates/ui-egui/src/revit_family.rs:268
+#: crates/ui-egui/src/revit_family.rs:270
 #: crates/ui-egui/src/titleblocks.rs:597
 #: crates/ui-egui/src/workplane.rs:294
 msgid "Name"
@@ -8241,7 +8241,7 @@ msgstr "{} mới"
 
 #: crates/core/src/schedule.rs:1321
 #: crates/ui-egui/src/properties.rs:892
-#: crates/ui-egui/src/revit_family.rs:130
+#: crates/ui-egui/src/revit_family.rs:131
 msgid "No"
 msgstr "Không"
 
@@ -8494,7 +8494,7 @@ msgstr "Ghi chú:"
 
 #: crates/ui-egui/src/revit.rs:84
 #: crates/ui-egui/src/revit.rs:252
-#: crates/ui-egui/src/revit_family.rs:300
+#: crates/ui-egui/src/revit_family.rs:302
 msgid "Noted"
 msgstr "Đã ghi nhận"
 
@@ -8550,7 +8550,7 @@ msgstr ""
 #: crates/ui-egui/src/adaptive_editor.rs:627
 #: crates/ui-egui/src/parameters.rs:29
 #: crates/ui-egui/src/parameters.rs:46
-#: crates/ui-egui/src/revit_family.rs:49
+#: crates/ui-egui/src/revit_family.rs:50
 msgid "Number"
 msgstr "Số"
 
@@ -9057,7 +9057,7 @@ msgstr "Các đường song song theo một góc và khoảng cách, có gạch 
 #: crates/ui-egui/src/parameters.rs:746
 #: crates/ui-egui/src/parameters.rs:1178
 #: crates/ui-egui/src/parameters.rs:1611
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 #: crates/ui-egui/src/templates.rs:567
 #: crates/ui-egui/src/typeprops.rs:164
 msgid "Parameter"
@@ -9588,7 +9588,7 @@ msgstr "Ống"
 msgid "Pipe (PI): click its start and its end; a chain of clicks makes a pipe for each step"
 msgstr "Ống (PI): nhấp điểm đầu và điểm cuối; một chuỗi lần nhấp tạo một ống cho mỗi bước"
 
-#: crates/ui-egui/src/revit_family.rs:69
+#: crates/ui-egui/src/revit_family.rs:70
 msgid "Pipe Accessories"
 msgstr ""
 
@@ -9616,7 +9616,7 @@ msgstr "Phụ tùng nối ống"
 msgid "Pipe Fitting (PF): an elbow or a tee, where you click on a pipe's height; Space turns it"
 msgstr "Phụ tùng nối ống (PF): một cút hoặc tê, tại chỗ bạn nhấp ở cao độ của ống; Space để xoay"
 
-#: crates/ui-egui/src/revit_family.rs:68
+#: crates/ui-egui/src/revit_family.rs:69
 msgid "Pipe Fittings"
 msgstr ""
 
@@ -9926,7 +9926,7 @@ msgid "Plumbing Fixture (PX): a basin, a WC, a sink, a shower or a drain, where 
 msgstr "Thiết bị vệ sinh (PX): chậu rửa, bồn cầu, chậu bếp, vòi sen hoặc phễu thu, tại chỗ bạn nhấp; Space để xoay"
 
 #: crates/ui-egui/src/editor.rs:938
-#: crates/ui-egui/src/revit_family.rs:67
+#: crates/ui-egui/src/revit_family.rs:68
 msgid "Plumbing Fixtures"
 msgstr "Thiết bị vệ sinh"
 
@@ -10979,7 +10979,7 @@ msgstr ""
 msgid "Revit Family: a .rfa file's types and their parameters brought into the project as a family, after a look at what the file gives and what it does not"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:181
+#: crates/ui-egui/src/revit_family.rs:183
 msgid "Revit family"
 msgstr ""
 
@@ -11694,8 +11694,8 @@ msgstr ""
 
 #: crates/ui-egui/src/coordinates.rs:1506
 #: crates/ui-egui/src/editor/options.rs:19
-#: crates/ui-egui/src/revit_family.rs:164
-#: crates/ui-egui/src/revit_family.rs:293
+#: crates/ui-egui/src/revit_family.rs:165
+#: crates/ui-egui/src/revit_family.rs:295
 msgid "Shared"
 msgstr "Dùng chung"
 
@@ -12849,7 +12849,7 @@ msgstr "Tiêu chuẩn kỹ thuật: cấu hình tiêu chuẩn bản vẽ (NBR, I
 msgid "Tee"
 msgstr "Tê"
 
-#: crates/ui-egui/src/revit_family.rs:76
+#: crates/ui-egui/src/revit_family.rs:77
 msgid "Telephone Devices"
 msgstr ""
 
@@ -12913,7 +12913,7 @@ msgstr ""
 #: crates/ui-egui/src/notes.rs:503
 #: crates/ui-egui/src/parameters.rs:28
 #: crates/ui-egui/src/parameters.rs:44
-#: crates/ui-egui/src/revit_family.rs:58
+#: crates/ui-egui/src/revit_family.rs:59
 #: crates/ui-egui/src/titleblocks.rs:199
 #: crates/ui-egui/src/titleblocks.rs:263
 #: crates/ui-egui/src/titleblocks.rs:465
@@ -13160,7 +13160,7 @@ msgstr "Họ {} bạn đang nạp đã có trong họ này nhưng được đị
 msgid "The family {} you are loading is already in this project, defined differently. What would you like to do?"
 msgstr "Họ {} bạn đang nạp đã có trong dự án này nhưng được định nghĩa khác. Bạn muốn làm gì?"
 
-#: crates/ui-egui/src/revit_family.rs:279
+#: crates/ui-egui/src/revit_family.rs:281
 msgid "The file lists no parameters."
 msgstr ""
 
@@ -13273,7 +13273,7 @@ msgstr "Biên dạng cắt qua đường trục: hãy vẽ nó về một phía 
 msgid "The project changed while this window was open: Cancel, and open it again."
 msgstr "Dự án đã thay đổi trong khi cửa sổ này đang mở: hãy Hủy và mở lại."
 
-#: crates/ui-egui/src/revit_family.rs:149
+#: crates/ui-egui/src/revit_family.rs:150
 msgid "The project has a family named {} already: give this one another name."
 msgstr ""
 
@@ -13996,7 +13996,7 @@ msgid "UP"
 msgstr "LÊN"
 
 #: crates/ui-egui/src/editor.rs:270
-#: crates/ui-egui/src/revit_family.rs:56
+#: crates/ui-egui/src/revit_family.rs:57
 msgid "URL"
 msgstr ""
 
@@ -14230,7 +14230,7 @@ msgstr ""
 #: crates/ui-egui/src/editor/document.rs:1727
 #: crates/ui-egui/src/editor/types_dialog.rs:261
 #: crates/ui-egui/src/parameters.rs:1312
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 #: crates/ui-egui/src/templates.rs:567
 #: crates/ui-egui/src/titleblocks.rs:142
 #: crates/ui-egui/src/typeprops.rs:164
@@ -14505,7 +14505,7 @@ msgstr "Điện áp"
 #: crates/core/src/schedule.rs:220
 #: crates/ui-egui/src/editor.rs:269
 #: crates/ui-egui/src/parameters.rs:33
-#: crates/ui-egui/src/revit_family.rs:53
+#: crates/ui-egui/src/revit_family.rs:54
 msgid "Volume"
 msgstr "Thể tích"
 
@@ -14727,7 +14727,7 @@ msgstr "Bảng thống kê cửa sổ"
 
 #: crates/ui-egui/src/editor/document.rs:592
 #: crates/ui-egui/src/lang.rs:34
-#: crates/ui-egui/src/revit_family.rs:78
+#: crates/ui-egui/src/revit_family.rs:79
 msgid "Windows"
 msgstr "Cửa sổ"
 
@@ -14888,14 +14888,14 @@ msgstr ""
 
 #: crates/core/src/schedule.rs:1321
 #: crates/ui-egui/src/properties.rs:891
-#: crates/ui-egui/src/revit_family.rs:130
+#: crates/ui-egui/src/revit_family.rs:131
 msgid "Yes"
 msgstr "Có"
 
 #: crates/ui-egui/src/editor.rs:264
 #: crates/ui-egui/src/parameters.rs:35
 #: crates/ui-egui/src/parameters.rs:48
-#: crates/ui-egui/src/revit_family.rs:54
+#: crates/ui-egui/src/revit_family.rs:55
 msgid "Yes/No"
 msgstr "Có/Không"
 
@@ -15877,7 +15877,7 @@ msgstr "{} đã mở một dự án khác"
 msgid "{} opened without {} fields this version doesn't know; saving it leaves them out."
 msgstr "Đã mở {}, bỏ qua {} trường mà phiên bản này không nhận biết; khi lưu, các trường đó sẽ bị loại bỏ."
 
-#: crates/ui-egui/src/revit_family.rs:239
+#: crates/ui-egui/src/revit_family.rs:241
 msgid "{} parameters"
 msgstr ""
 
@@ -15938,11 +15938,11 @@ msgstr "{} đã dừng trợ lý"
 msgid "{} triangles, from a file"
 msgstr "{} tam giác, từ một tệp"
 
-#: crates/ui-egui/src/revit_family.rs:238
+#: crates/ui-egui/src/revit_family.rs:240
 msgid "{} types"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:115
+#: crates/ui-egui/src/revit_family.rs:116
 msgid "{} types: {}"
 msgstr ""
 
@@ -16091,7 +16091,7 @@ msgid "{}: in the 3D view its points go on a level face (the top of a floor, a c
 msgstr ""
 
 #: crates/ui-egui/src/revit.rs:138
-#: crates/ui-egui/src/revit_family.rs:191
+#: crates/ui-egui/src/revit_family.rs:193
 msgid "{}: this build of BIMCraft was made without Revit support (`--no-default-features`); build with the default `rvt` feature to read Revit files"
 msgstr "{}: bản dựng BIMCraft này không hỗ trợ Revit (`--no-default-features`); hãy dựng với tính năng mặc định `rvt` để đọc tệp Revit"
 

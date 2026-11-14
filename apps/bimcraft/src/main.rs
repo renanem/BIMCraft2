@@ -347,7 +347,10 @@ fn revit_reader() -> Option<Importer> {
 fn revit_family_reader() -> Option<bimcraft_ui_egui::revit_family::FamilyReader> {
     use bimcraft_ui_egui::revit_family::FamilyRead;
     Some(std::sync::Arc::new(|path: &Path| {
-        bimcraft_rvt::family_path(path).map(|read| FamilyRead { name: read.name, family: read.family, notes: read.notes })
+        // A family the bridge exported from Revit is JSON of BIMCraft's own; a `.rfa` is read for its PartAtom entry.
+        let export = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
+        let read = if export { bimcraft_rvt::exchange_family_path(path) } else { bimcraft_rvt::family_path(path) };
+        read.map(|read| FamilyRead { name: read.name, family: read.family, notes: read.notes })
     }))
 }
 
@@ -414,6 +417,16 @@ mod tests {
         // A file that is not Revit's is refused, in words, not a panic.
         std::fs::write(&file, b"not a Revit file").unwrap();
         assert!(read(&file).is_err());
+        // What the bridge exported from Revit is read by the same reader, told by its `.json`.
+        let export = path.join("0000_Stool.rfa.json");
+        let text = r#"{"format": "bimcraft-revit-family", "version": 1, "name": "Bar Stool", "category": "OST_Furniture",
+            "parameters": [{"name": "Seat", "kind": "length", "instance": true}],
+            "types": [{"name": "Low", "values": {"Seat": 450.0}, "triangles": [[[0, 0, 0], [9, 0, 0], [0, 9, 0]]]}]}"#;
+        std::fs::write(&export, text).unwrap();
+        let family = read(&export).unwrap();
+        assert_eq!(family.name, "Bar Stool");
+        assert_eq!(family.family["parameters"][0]["instance"], true);
+        assert_eq!(family.family["forms"].as_array().map(Vec::len), Some(1));
         let _ = std::fs::remove_dir_all(path);
     }
 

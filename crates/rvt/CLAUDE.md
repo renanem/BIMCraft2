@@ -19,6 +19,10 @@ the crate is Apache-2.0 only, ported in part from rvt-rs and fenced by [docs/rvt
   command, checked against `Family::check` as they are built, with notes of what the entry does not hold (geometry, instance
   parameters, formulas) and of each parameter or type left out or renamed. Data types are told by unit, never by a
   translated name.
+- **What the bridge exported is not Revit's format** (`exchange.rs`): JSON of BIMCraft's own, written from Revit's public API
+  by `tools/revit_bridge`, read as hostile and built the same way, formulas tried one at a time and a mesh for each type.
+  A change to what the bridge writes changes `exchange.rs`, its `VERSION` when an older reader would misread it, and the
+  layout at the top of the module.
 - Lengths and counts a file claims are bounded before anything is allocated (`Limits`), and the sweep of hostile files is part of
   the tests.
 - References to levels and hosts in the model are GUIDs (`Model::guid`), and what the import puts in the library is given its ids

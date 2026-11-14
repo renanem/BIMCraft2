@@ -18,7 +18,8 @@ const USAGE: &str = "USAGE:
   bimcraft-cli run [FILE] [--sample | --highrise] [--cmd 'ID {json}']… [--script FILE]… [--save PATH]…
       Open FILE (a .bimc project or an earlier .bimcraft, or an .ifc or Revit .rvt file to import) or start empty, then in order: build the sample house, run
       commands and scripts (one `ID {json}` per line), save. A Revit family (.rfa) named among them is loaded into the project
-      as a family, its types and their parameters, and says what the file did not give. --save writes by extension:
+      as a family, its types and their parameters, and says what the file did not give; so is one tools/revit_bridge exported
+      from Revit (.rfa.json), with its instance parameters, formulas and a mesh for each type. --save writes by extension:
       .bimc (the project; .bimt the same), .ifc (IFC4), .glb (the 3D view's scene as glTF), .svg or .png (the lowest level's plan).
       Scripts may name a line `@name = ID {json}`; later values use `@name`, `$last`, `$-2` or a field such as `@walls.ids.0`.
       --highrise builds an original 20-storey performance sample (about 10,000 elements).
@@ -524,6 +525,45 @@ modify {"id":"$last","mark":"Entry"}"#,
         let bare = revit_file("Bare.rfa", &container(&[("BasicFileInfo", &basic_file_info(&Basic::default()))]));
         let e = cli_out(&["run", &bare]).unwrap_err();
         assert!(e.contains("Bare.rfa") && e.contains("PartAtom"), "{e}");
+    }
+
+    #[cfg(feature = "rvt")]
+    #[test]
+    fn a_family_the_bridge_exported_from_revit_is_loaded_with_its_formulas_instance_parameters_and_meshes() {
+        let tri = |s: f64| json!([[[0, 0, 0], [s, 0, 0], [0, s, 0]], [[0, 0, 0], [0, s, 0], [0, 0, s]]]);
+        let export = json!({
+            "format": "bimcraft-revit-family", "version": 1, "name": "Stool", "category": "OST_Furniture",
+            "parameters": [
+                {"name": "Seat Height", "kind": "length"},
+                {"name": "Foot Rest", "kind": "length", "formula": "Seat Height / 2"},
+                {"name": "Swivel", "kind": "yesno", "instance": true},
+            ],
+            "types": [
+                {"name": "Low", "values": {"Seat Height": 450.0, "Foot Rest": 225.0, "Swivel": true}, "triangles": tri(450.0)},
+                {"name": "Bar", "values": {"Seat Height": 762.0, "Foot Rest": 381.0, "Swivel": true}, "triangles": tri(762.0)},
+            ],
+        });
+        // Named for the file it came from, as the bridge names it; the family's name is the export's own.
+        let file = revit_file("0003_Stool.rfa.json", export.to_string().as_bytes());
+        let saved = std::path::Path::new(&file).with_file_name("with-stool.bimc").to_string_lossy().into_owned();
+        let place = r#"component {"family": "Stool", "type": "Bar", "at": [1000, 1000]}"#;
+        let out = cli_out(&["run", &file, "--cmd", place, "--save", &saved]).unwrap();
+        let reply: Value = serde_json::from_str(out.lines().find(|l| l.contains("\"family\"")).unwrap()).unwrap();
+        assert_eq!((reply["family"].as_str(), reply["category"].as_str()), (Some("Stool"), Some("furniture")));
+        assert_eq!((reply["types"].as_u64(), reply["forms"].as_u64()), (Some(2), Some(2)));
+        let notes: Vec<&str> = reply["skipped"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(notes[0].starts_with("2 types, 3 parameters (1 instance, 1 formula) and the geometry of 2 types read"), "{notes:?}");
+        let mut s = Session::new();
+        s.execute("open", &json!({"path": saved})).unwrap();
+        let stool = &s.model.families["Stool"];
+        assert_eq!(stool.forms.len(), 2);
+        assert!(stool.parameters.iter().any(|p| p.name == "Foot Rest" && p.formula.as_deref() == Some("Seat Height / 2")));
+        assert!(stool.parameters.iter().any(|p| p.name == "Swivel" && p.instance));
+        assert_eq!(s.model.elements.values().filter(|e| e.category() == "component").count(), 1);
+        // A JSON that is not the bridge's says so, and names the file.
+        let other = revit_file("Other.rfa.json", br#"{"name": "x"}"#);
+        let e = cli_out(&["run", &other]).unwrap_err();
+        assert!(e.contains("Other.rfa.json") && e.contains("tools/revit_bridge"), "{e}");
     }
 
     #[cfg(not(feature = "rvt"))]

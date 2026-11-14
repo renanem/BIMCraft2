@@ -116,6 +116,25 @@ the family and its first type and the status box says how many types and paramet
 on the screen in red. `BIMCRAFT_REVIT_FAMILY_DUMP=<folder> cargo test -p bimcraft-ui-egui revit_family_screenshots` writes the
 screen light and dark, and with a name already taken.
 
+What a `.rfa` does not give comes through the bridge ([tools/revit_bridge](../../tools/revit_bridge/README.md)), a pyRevit
+button that asks Revit's public API and writes, for each family, a file `NNNN_name.rfa.json` of BIMCraft's own format
+(`bimcraft-revit-family`, version 1, laid out at the top of `crates/rvt/src/exchange.rs`): the category as its `BuiltInCategory`
+name, the options, every parameter (kind by its `SpecTypeId`, instance or type, shared GUID, group by its `GroupTypeId`,
+formula as Revit writes it, reporting), each type's values in the model's units, and each type's geometry as triangles in
+millimetres. `exchange_family` reads that JSON, which is hostile like any file, the way `family.rs` reads the entry: each
+parameter tried against `Family::check` as it is added, an instance parameter set by no type, then the formulas one at a
+time once every parameter they may name is there (a parameter renamed here is renamed in them, `renamed_in_formula`). A
+formula the rules refuse is left out and its parameter keeps each type's value; one they take is kept as written, and no type
+sets its parameter. A family of one type has one mesh form; of several, a number parameter `Imported Type` that each type
+sets to its place, and a mesh form for each type `visible` where it equals that place, so a component shows its type's shape.
+Geometry that is no mesh (a triangle that is not three points within `MAX_COORD`), or that the rules refuse, leaves the
+geometry out and the parameters in, with the reason. A newer `version` is refused, and a field this version does not know is
+passed over. The same `FamilyFile` comes back, so the command line (`.rfa.json` named to `run`) and Insert > Revit Family
+(whose dialog offers `.rfa` and `.json`) load it as they load a `.rfa`. The bridge's own tests are Python
+(`python -m unittest discover -s tools/revit_bridge -p test_bridge.py`; with `BIMCRAFT_CLI` set to a built `bimcraft-cli`, one
+of them writes an export, loads it, places both types and reads the family back). The button itself has not been run inside
+Revit: its API calls were checked against the Revit 2027 API reference only.
+
 ## Revit family library exchange and project templates (fork)
 
-The desktop also offers `.rte` project templates through the existing project importer. These open as unsaved projects, with an explicit report note: unused definitions and template settings are not reconstructed. A binary `.rfa`/`.rft` file is not opened as a project: its types and parameters load as a family (above), and its geometry comes through the public-API [family library bridge](../../tools/revit_bridge/README.md). It exports per-type mesh snapshots and a self-contained native command script, not parametric constraints or an entire template. No Autodesk assets are bundled. The API exporter still needs validation in Revit; converter tests use synthetic geometry.
+The desktop also offers `.rte` project templates through the existing project importer. These open as unsaved projects, with an explicit report note: unused definitions and template settings are not reconstructed. A binary `.rfa`/`.rft` file is not opened as a project: its types and parameters load as a family (above), and its geometry comes through the public-API [family library bridge](../../tools/revit_bridge/README.md). It exports each family's parameters and per-type mesh snapshots, not parametric constraints or an entire template. No Autodesk assets are bundled. The API exporter still needs validation in Revit; converter tests use synthetic geometry.

@@ -63,15 +63,15 @@ msgstr ""
 msgid "1 page"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:239
+#: crates/ui-egui/src/revit_family.rs:241
 msgid "1 parameter"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:238
+#: crates/ui-egui/src/revit_family.rs:240
 msgid "1 type"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:114
+#: crates/ui-egui/src/revit_family.rs:115
 msgid "1 type: {}"
 msgstr ""
 
@@ -224,7 +224,7 @@ msgstr "Dveře nebo okno stojí ve své stěně: nemohou být založeny na praco
 msgid "A family file, to edit."
 msgstr "Soubor rodiny k úpravě."
 
-#: crates/ui-egui/src/revit_family.rs:147
+#: crates/ui-egui/src/revit_family.rs:148
 msgid "A family needs a name."
 msgstr ""
 
@@ -725,7 +725,7 @@ msgid "Air Terminal (AT): a captor, where you click on the roof; Space turns it"
 msgstr "Jímač (AT): jímací prvek v místě kliknutí na střeše; Mezerník jej otočí"
 
 #: crates/ui-egui/src/editor.rs:945
-#: crates/ui-egui/src/revit_family.rs:74
+#: crates/ui-egui/src/revit_family.rs:75
 msgid "Air Terminals"
 msgstr "Jímače"
 
@@ -954,7 +954,7 @@ msgstr "A:"
 #: crates/ui-egui/src/parameters.rs:34
 #: crates/ui-egui/src/parameters.rs:47
 #: crates/ui-egui/src/reinforce.rs:83
-#: crates/ui-egui/src/revit_family.rs:51
+#: crates/ui-egui/src/revit_family.rs:52
 msgid "Angle"
 msgstr "Úhel"
 
@@ -1119,7 +1119,7 @@ msgstr ""
 #: crates/core/src/schedule.rs:244
 #: crates/ui-egui/src/editor.rs:268
 #: crates/ui-egui/src/parameters.rs:32
-#: crates/ui-egui/src/revit_family.rs:52
+#: crates/ui-egui/src/revit_family.rs:53
 msgid "Area"
 msgstr "Plocha"
 
@@ -1797,7 +1797,7 @@ msgstr "Kamera: klikněte na místo, kde stojí její oko, a potom na to, na co 
 #: crates/ui-egui/src/publisher.rs:967
 #: crates/ui-egui/src/purge.rs:77
 #: crates/ui-egui/src/reinforce.rs:536
-#: crates/ui-egui/src/revit_family.rs:312
+#: crates/ui-egui/src/revit_family.rs:314
 #: crates/ui-egui/src/shortcuts.rs:412
 #: crates/ui-egui/src/shortcuts.rs:540
 #: crates/ui-egui/src/standards.rs:334
@@ -1858,7 +1858,7 @@ msgid "Casement Window"
 msgstr "Křídlové okno"
 
 #: crates/ui-egui/src/editor.rs:937
-#: crates/ui-egui/src/revit_family.rs:66
+#: crates/ui-egui/src/revit_family.rs:67
 msgid "Casework"
 msgstr "Vestavěný nábytek"
 
@@ -3230,7 +3230,7 @@ msgstr ""
 
 #: crates/ui-egui/src/plugins.rs:255
 #: crates/ui-egui/src/revit.rs:262
-#: crates/ui-egui/src/revit_family.rs:314
+#: crates/ui-egui/src/revit_family.rs:316
 msgid "Copied"
 msgstr "Zkopírováno"
 
@@ -3304,7 +3304,7 @@ msgid "Copy IFC GlobalIds"
 msgstr "Kopírovat globální ID IFC"
 
 #: crates/ui-egui/src/revit.rs:262
-#: crates/ui-egui/src/revit_family.rs:314
+#: crates/ui-egui/src/revit_family.rs:316
 msgid "Copy Report"
 msgstr "Kopírovat zprávu"
 
@@ -3381,7 +3381,7 @@ msgstr "Nepodařilo se otevřít {}: {}"
 msgid "Couldn't print: {}"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:210
+#: crates/ui-egui/src/revit_family.rs:212
 msgid "Couldn't read {}: {}"
 msgstr ""
 
@@ -3671,7 +3671,7 @@ msgstr "Datový konektor"
 msgid "Data Connector: where a data cable meets the family"
 msgstr "Datový konektor: kde se datový kabel napojuje na rodinu"
 
-#: crates/ui-egui/src/revit_family.rs:75
+#: crates/ui-egui/src/revit_family.rs:76
 msgid "Data Devices"
 msgstr ""
 
@@ -3687,7 +3687,7 @@ msgstr "Datová zásuvka (DT): datový bod v místě kliknutí na stěně; Mezer
 msgid "Data Outlets"
 msgstr "Datové zásuvky"
 
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 msgid "Data Type"
 msgstr ""
 
@@ -4284,7 +4284,7 @@ msgstr "Dveře (DR): klikněte na stěnu"
 msgid "Door Schedule"
 msgstr "Výkaz dveří"
 
-#: crates/ui-egui/src/revit_family.rs:77
+#: crates/ui-egui/src/revit_family.rs:78
 msgid "Doors"
 msgstr ""
 
@@ -4735,7 +4735,7 @@ msgid "Electrical Ceiling"
 msgstr ""
 
 #: crates/ui-egui/src/editor.rs:942
-#: crates/ui-egui/src/revit_family.rs:70
+#: crates/ui-egui/src/revit_family.rs:71
 msgid "Electrical Equipment"
 msgstr "Elektrická zařízení"
 
@@ -4743,7 +4743,7 @@ msgstr "Elektrická zařízení"
 msgid "Electrical Equipment (EE): a distribution board, where you click on the wall; Space turns it"
 msgstr "Elektrické zařízení (EE): rozvaděč v místě kliknutí na stěnu; Mezerník prvek otočí"
 
-#: crates/ui-egui/src/revit_family.rs:71
+#: crates/ui-egui/src/revit_family.rs:72
 msgid "Electrical Fixtures"
 msgstr ""
 
@@ -5143,7 +5143,7 @@ msgid "Family Parameters"
 msgstr "Parametry rodiny"
 
 #: crates/ui-egui/src/editor.rs:271
-#: crates/ui-egui/src/revit_family.rs:57
+#: crates/ui-egui/src/revit_family.rs:58
 msgid "Family Type"
 msgstr ""
 
@@ -5724,7 +5724,7 @@ msgid "Function"
 msgstr "Funkce"
 
 #: crates/ui-egui/src/editor.rs:936
-#: crates/ui-egui/src/revit_family.rs:65
+#: crates/ui-egui/src/revit_family.rs:66
 msgid "Furniture"
 msgstr "Nábytek"
 
@@ -5768,7 +5768,7 @@ msgstr "Šoupátko"
 msgid "Generic"
 msgstr "Obecný"
 
-#: crates/ui-egui/src/revit_family.rs:79
+#: crates/ui-egui/src/revit_family.rs:80
 msgid "Generic Models"
 msgstr ""
 
@@ -6189,7 +6189,7 @@ msgstr ""
 #: crates/ui-egui/src/editor/document.rs:582
 #: crates/ui-egui/src/lib.rs:4900
 #: crates/ui-egui/src/parameters.rs:1128
-#: crates/ui-egui/src/revit_family.rs:313
+#: crates/ui-egui/src/revit_family.rs:315
 msgid "Import"
 msgstr "Importovat"
 
@@ -6214,7 +6214,7 @@ msgstr "Importovat CAD: výkres DWG nebo DXF vložený do projektu, vykreslený 
 msgid "Import DXF…"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:263
+#: crates/ui-egui/src/revit_family.rs:265
 msgid "Import Revit Family"
 msgstr ""
 
@@ -6249,7 +6249,7 @@ msgstr "Importované kategorie"
 msgid "Imported from this file"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:234
+#: crates/ui-egui/src/revit_family.rs:236
 msgid "Imported the family {} from {}: {}, {}."
 msgstr ""
 
@@ -6413,7 +6413,7 @@ msgstr "Tepelná izolace: měkká izolace kreslená podél každé čáry, ší�
 
 #: crates/ui-egui/src/editor.rs:267
 #: crates/ui-egui/src/parameters.rs:30
-#: crates/ui-egui/src/revit_family.rs:50
+#: crates/ui-egui/src/revit_family.rs:51
 msgid "Integer"
 msgstr ""
 
@@ -6801,7 +6801,7 @@ msgstr "Půjčit váš klíč AI?"
 #: crates/ui-egui/src/linestyles/creator.rs:149
 #: crates/ui-egui/src/parameters.rs:31
 #: crates/ui-egui/src/parameters.rs:45
-#: crates/ui-egui/src/revit_family.rs:48
+#: crates/ui-egui/src/revit_family.rs:49
 msgid "Length"
 msgstr "Délka"
 
@@ -6881,7 +6881,7 @@ msgstr "Světlý"
 msgid "Lighting"
 msgstr "Osvětlení"
 
-#: crates/ui-egui/src/revit_family.rs:72
+#: crates/ui-egui/src/revit_family.rs:73
 msgid "Lighting Devices"
 msgstr ""
 
@@ -6893,7 +6893,7 @@ msgstr "Osvětlovací těleso"
 msgid "Lighting Fixture (LF): a luminaire, where you click, hung from the slab; Space turns it"
 msgstr "Osvětlovací těleso (LF): svítidlo v místě kliknutí, zavěšené pod deskou; Mezerník prvek otočí"
 
-#: crates/ui-egui/src/revit_family.rs:73
+#: crates/ui-egui/src/revit_family.rs:74
 msgid "Lighting Fixtures"
 msgstr ""
 
@@ -7506,7 +7506,7 @@ msgstr "Shoda vlastností: použit typ '{}' na {} prvek (prvky)"
 #: crates/ui-egui/src/properties.rs:2815
 #: crates/ui-egui/src/properties.rs:2956
 #: crates/ui-egui/src/properties.rs:3148
-#: crates/ui-egui/src/revit_family.rs:55
+#: crates/ui-egui/src/revit_family.rs:56
 msgid "Material"
 msgstr "Materiál"
 
@@ -8069,7 +8069,7 @@ msgstr "NEUZAVŘENÝ OBVOD"
 #: crates/ui-egui/src/properties.rs:2486
 #: crates/ui-egui/src/properties.rs:2970
 #: crates/ui-egui/src/properties.rs:3863
-#: crates/ui-egui/src/revit_family.rs:268
+#: crates/ui-egui/src/revit_family.rs:270
 #: crates/ui-egui/src/titleblocks.rs:597
 #: crates/ui-egui/src/workplane.rs:294
 msgid "Name"
@@ -8240,7 +8240,7 @@ msgstr "Nový {}"
 
 #: crates/core/src/schedule.rs:1321
 #: crates/ui-egui/src/properties.rs:892
-#: crates/ui-egui/src/revit_family.rs:130
+#: crates/ui-egui/src/revit_family.rs:131
 msgid "No"
 msgstr "Ne"
 
@@ -8493,7 +8493,7 @@ msgstr "Poznámka:"
 
 #: crates/ui-egui/src/revit.rs:84
 #: crates/ui-egui/src/revit.rs:252
-#: crates/ui-egui/src/revit_family.rs:300
+#: crates/ui-egui/src/revit_family.rs:302
 msgid "Noted"
 msgstr "Zaznamenáno"
 
@@ -8549,7 +8549,7 @@ msgstr ""
 #: crates/ui-egui/src/adaptive_editor.rs:627
 #: crates/ui-egui/src/parameters.rs:29
 #: crates/ui-egui/src/parameters.rs:46
-#: crates/ui-egui/src/revit_family.rs:49
+#: crates/ui-egui/src/revit_family.rs:50
 msgid "Number"
 msgstr "Číslo"
 
@@ -9056,7 +9056,7 @@ msgstr "Rovnoběžné čáry v zadaném úhlu a rozteči, křížené nebo ne"
 #: crates/ui-egui/src/parameters.rs:746
 #: crates/ui-egui/src/parameters.rs:1178
 #: crates/ui-egui/src/parameters.rs:1611
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 #: crates/ui-egui/src/templates.rs:567
 #: crates/ui-egui/src/typeprops.rs:164
 msgid "Parameter"
@@ -9587,7 +9587,7 @@ msgstr "Potrubí"
 msgid "Pipe (PI): click its start and its end; a chain of clicks makes a pipe for each step"
 msgstr "Potrubí (PI): klikněte na začátek a konec; řada kliknutí vytvoří úsek potrubí pro každý krok"
 
-#: crates/ui-egui/src/revit_family.rs:69
+#: crates/ui-egui/src/revit_family.rs:70
 msgid "Pipe Accessories"
 msgstr ""
 
@@ -9615,7 +9615,7 @@ msgstr "Tvarovka potrubí"
 msgid "Pipe Fitting (PF): an elbow or a tee, where you click on a pipe's height; Space turns it"
 msgstr "Tvarovka potrubí (PF): koleno nebo T-kus v místě kliknutí ve výšce potrubí; mezerník ji otočí"
 
-#: crates/ui-egui/src/revit_family.rs:68
+#: crates/ui-egui/src/revit_family.rs:69
 msgid "Pipe Fittings"
 msgstr ""
 
@@ -9925,7 +9925,7 @@ msgid "Plumbing Fixture (PX): a basin, a WC, a sink, a shower or a drain, where 
 msgstr "Zařizovací předmět (PX): umyvadlo, WC, dřez, sprcha nebo vpusť v místě kliknutí; mezerník jej otočí"
 
 #: crates/ui-egui/src/editor.rs:938
-#: crates/ui-egui/src/revit_family.rs:67
+#: crates/ui-egui/src/revit_family.rs:68
 msgid "Plumbing Fixtures"
 msgstr "Zařizovací předměty"
 
@@ -10978,7 +10978,7 @@ msgstr ""
 msgid "Revit Family: a .rfa file's types and their parameters brought into the project as a family, after a look at what the file gives and what it does not"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:181
+#: crates/ui-egui/src/revit_family.rs:183
 msgid "Revit family"
 msgstr ""
 
@@ -11693,8 +11693,8 @@ msgstr ""
 
 #: crates/ui-egui/src/coordinates.rs:1506
 #: crates/ui-egui/src/editor/options.rs:19
-#: crates/ui-egui/src/revit_family.rs:164
-#: crates/ui-egui/src/revit_family.rs:293
+#: crates/ui-egui/src/revit_family.rs:165
+#: crates/ui-egui/src/revit_family.rs:295
 msgid "Shared"
 msgstr "Sdílená"
 
@@ -12848,7 +12848,7 @@ msgstr "Technické normy: nastavení norem výkresů (NBR, ISO, ANSI, EU); nyní
 msgid "Tee"
 msgstr "T-kus"
 
-#: crates/ui-egui/src/revit_family.rs:76
+#: crates/ui-egui/src/revit_family.rs:77
 msgid "Telephone Devices"
 msgstr ""
 
@@ -12912,7 +12912,7 @@ msgstr ""
 #: crates/ui-egui/src/notes.rs:503
 #: crates/ui-egui/src/parameters.rs:28
 #: crates/ui-egui/src/parameters.rs:44
-#: crates/ui-egui/src/revit_family.rs:58
+#: crates/ui-egui/src/revit_family.rs:59
 #: crates/ui-egui/src/titleblocks.rs:199
 #: crates/ui-egui/src/titleblocks.rs:263
 #: crates/ui-egui/src/titleblocks.rs:465
@@ -13159,7 +13159,7 @@ msgstr "Rodina {}, kterou načítáte, už v této rodině existuje, ale je defi
 msgid "The family {} you are loading is already in this project, defined differently. What would you like to do?"
 msgstr "Rodina {}, kterou načítáte, už v tomto projektu existuje, ale je definována jinak. Co chcete udělat?"
 
-#: crates/ui-egui/src/revit_family.rs:279
+#: crates/ui-egui/src/revit_family.rs:281
 msgid "The file lists no parameters."
 msgstr ""
 
@@ -13272,7 +13272,7 @@ msgstr "Profil kříží čáru osy: nakreslete jej na jednu stranu osy."
 msgid "The project changed while this window was open: Cancel, and open it again."
 msgstr "Projekt se změnil, zatímco bylo toto okno otevřené: Zrušte operaci a otevřete jej znovu."
 
-#: crates/ui-egui/src/revit_family.rs:149
+#: crates/ui-egui/src/revit_family.rs:150
 msgid "The project has a family named {} already: give this one another name."
 msgstr ""
 
@@ -13995,7 +13995,7 @@ msgid "UP"
 msgstr "NAHORU"
 
 #: crates/ui-egui/src/editor.rs:270
-#: crates/ui-egui/src/revit_family.rs:56
+#: crates/ui-egui/src/revit_family.rs:57
 msgid "URL"
 msgstr ""
 
@@ -14229,7 +14229,7 @@ msgstr ""
 #: crates/ui-egui/src/editor/document.rs:1727
 #: crates/ui-egui/src/editor/types_dialog.rs:261
 #: crates/ui-egui/src/parameters.rs:1312
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 #: crates/ui-egui/src/templates.rs:567
 #: crates/ui-egui/src/titleblocks.rs:142
 #: crates/ui-egui/src/typeprops.rs:164
@@ -14504,7 +14504,7 @@ msgstr "Napětí"
 #: crates/core/src/schedule.rs:220
 #: crates/ui-egui/src/editor.rs:269
 #: crates/ui-egui/src/parameters.rs:33
-#: crates/ui-egui/src/revit_family.rs:53
+#: crates/ui-egui/src/revit_family.rs:54
 msgid "Volume"
 msgstr "Objem"
 
@@ -14726,7 +14726,7 @@ msgstr "Výkaz oken"
 
 #: crates/ui-egui/src/editor/document.rs:592
 #: crates/ui-egui/src/lang.rs:34
-#: crates/ui-egui/src/revit_family.rs:78
+#: crates/ui-egui/src/revit_family.rs:79
 msgid "Windows"
 msgstr "Okna"
 
@@ -14887,14 +14887,14 @@ msgstr ""
 
 #: crates/core/src/schedule.rs:1321
 #: crates/ui-egui/src/properties.rs:891
-#: crates/ui-egui/src/revit_family.rs:130
+#: crates/ui-egui/src/revit_family.rs:131
 msgid "Yes"
 msgstr "Ano"
 
 #: crates/ui-egui/src/editor.rs:264
 #: crates/ui-egui/src/parameters.rs:35
 #: crates/ui-egui/src/parameters.rs:48
-#: crates/ui-egui/src/revit_family.rs:54
+#: crates/ui-egui/src/revit_family.rs:55
 msgid "Yes/No"
 msgstr "Ano/Ne"
 
@@ -15876,7 +15876,7 @@ msgstr "{} otevřel(a) jiný projekt"
 msgid "{} opened without {} fields this version doesn't know; saving it leaves them out."
 msgstr "{} byl otevřen bez {} polí, která tato verze nezná; při uložení budou vynechána."
 
-#: crates/ui-egui/src/revit_family.rs:239
+#: crates/ui-egui/src/revit_family.rs:241
 msgid "{} parameters"
 msgstr ""
 
@@ -15937,11 +15937,11 @@ msgstr "{} zastavil(a) asistenta"
 msgid "{} triangles, from a file"
 msgstr "{} trojúhelníků, ze souboru"
 
-#: crates/ui-egui/src/revit_family.rs:238
+#: crates/ui-egui/src/revit_family.rs:240
 msgid "{} types"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:115
+#: crates/ui-egui/src/revit_family.rs:116
 msgid "{} types: {}"
 msgstr ""
 
@@ -16090,7 +16090,7 @@ msgid "{}: in the 3D view its points go on a level face (the top of a floor, a c
 msgstr "{}: ve 3D pohledu se body umisťují na vodorovnou plochu (horní líc podlahy, sloupu, ploché střechy nebo podlaží): ukažte na některou"
 
 #: crates/ui-egui/src/revit.rs:138
-#: crates/ui-egui/src/revit_family.rs:191
+#: crates/ui-egui/src/revit_family.rs:193
 msgid "{}: this build of BIMCraft was made without Revit support (`--no-default-features`); build with the default `rvt` feature to read Revit files"
 msgstr "{}: toto sestavení BIMCraft bylo vytvořeno bez podpory Revitu (`--no-default-features`); pro čtení souborů Revit proveďte sestavení s výchozí funkcí `rvt`"
 

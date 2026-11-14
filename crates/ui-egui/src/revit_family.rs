@@ -1,4 +1,5 @@
-//! Import Revit Family (Insert > Revit Family): a `.rfa` read by the reader the desktop app attaches, shown before anything
+//! Import Revit Family (Insert > Revit Family): a `.rfa`, or a family the bridge exported from Revit (`.rfa.json`, with
+//! instance parameters, formulas and a mesh for each type), read by the reader the desktop app attaches, shown before anything
 //! changes: the family's name (which may be changed), its category and types, a row for each parameter with its kind, its
 //! first type's value and whether it is shared, and the reader's notes of what the file did not give or what was left out.
 //! Import runs the `family` command with what was read, as one undo step, and hands the family to the Component tool.
@@ -178,7 +179,8 @@ fn file_name(path: &Path) -> String {
 impl BimApp {
     /// Insert > Revit Family's button: asks for a `.rfa` and reads it.
     pub(crate) fn revit_family_dialog(&mut self, ctx: &Context) {
-        let dialog = rfd::AsyncFileDialog::new().add_filter(t("Revit family"), &["rfa"]);
+        // A `.rfa`, or what tools/revit_bridge exported of one from Revit (`.rfa.json`).
+        let dialog = rfd::AsyncFileDialog::new().add_filter(t("Revit family"), &["rfa", "json"]);
         self.ask_file(ctx, dialog, false, |app, path| app.import_revit_family(&path));
     }
 

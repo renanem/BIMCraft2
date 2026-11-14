@@ -316,7 +316,7 @@ fn value(raw: &Raw) -> std::result::Result<(&'static str, Value), String> {
 }
 
 /// A name the family's rules take (`nameable`), made of `name`: what they refuse becomes `_`, and it is cut to their length.
-fn named(name: &str) -> String {
+pub(crate) fn named(name: &str) -> String {
     let mut out: String =
         name.trim().chars().take(MAX_TEXT).map(|c| if c.is_alphanumeric() || c == '_' || c == ' ' { c } else { '_' }).collect();
     if !out.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
@@ -327,7 +327,7 @@ fn named(name: &str) -> String {
 }
 
 /// `names` as a note lists them: the first few, in backticks, and how many more.
-fn listed(names: &[String]) -> String {
+pub(crate) fn listed(names: &[String]) -> String {
     let cut = |n: &String| -> String {
         let short: String = n.chars().take(60).collect();
         format!("`{short}`")
@@ -339,7 +339,7 @@ fn listed(names: &[String]) -> String {
     out
 }
 
-fn count(n: usize, one: &str) -> String {
+pub(crate) fn count(n: usize, one: &str) -> String {
     format!("{n} {one}{}", if n == 1 { "" } else { "s" })
 }
 
@@ -568,7 +568,7 @@ pub fn family(xml: &[u8], name: &str) -> Result<FamilyFile> {
 }
 
 /// Whether `text` is written as a GUID: 8-4-4-4-12 hexadecimal digits.
-fn is_guid(text: &str) -> bool {
+pub(crate) fn is_guid(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
     groups.len() == 5 && groups.iter().zip([8, 4, 4, 4, 12]).all(|(g, n)| g.len() == n && g.chars().all(|c| c.is_ascii_hexdigit()))
 }

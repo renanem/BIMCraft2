@@ -10,10 +10,16 @@ pub fn is_revit(path: &str) -> bool {
     matches!(ext.as_str(), "rvt" | "rfa" | "rte" | "rft")
 }
 
-/// Whether a path names a Revit family (or a family template), which is loaded into a project, never opened as one.
+/// Whether a path names a Revit family (or a family template), or one the bridge exported from Revit (`.rfa.json`): either is
+/// loaded into a project, never opened as one.
 pub fn is_family(path: &str) -> bool {
     let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    matches!(ext.as_str(), "rfa" | "rft")
+    matches!(ext.as_str(), "rfa" | "rft") || is_export(path)
+}
+
+/// Whether a path names a family exported from Revit by tools/revit_bridge.
+fn is_export(path: &str) -> bool {
+    path.to_ascii_lowercase().ends_with(".rfa.json")
 }
 
 #[cfg(not(feature = "rvt"))]
@@ -21,13 +27,16 @@ pub fn load_family(_: &mut Session, path: &str) -> Result<Value, String> {
     Err(format!("{path}: {WITHOUT}"))
 }
 
-/// Loads a Revit family into the session's project through the `family` command: its types and their parameters, as the
-/// file's PartAtom entry lists them. The reply says what came in and, in `skipped`, what was left out and why.
+/// Loads a Revit family into the session's project through the `family` command: from a `.rfa`, its types and their
+/// parameters, as the file's PartAtom entry lists them; from the bridge's export (`.rfa.json`), every parameter with its
+/// formula and a mesh for each type. The reply says what came in and, in `skipped`, what was left out and why.
 #[cfg(feature = "rvt")]
 pub fn load_family(s: &mut Session, path: &str) -> Result<Value, String> {
     use serde_json::json;
 
-    let read = bimcraft_rvt::family_path(std::path::Path::new(path)).map_err(|e| format!("{path}: {e}"))?;
+    let file = std::path::Path::new(path);
+    let read = if is_export(path) { bimcraft_rvt::exchange_family_path(file) } else { bimcraft_rvt::family_path(file) };
+    let read = read.map_err(|e| format!("{path}: {e}"))?;
     s.execute("family", &read.family).map_err(|e| format!("{path}: {e}"))?;
     let count = |key: &str| read.family[key].as_object().map(|o| o.len()).or_else(|| read.family[key].as_array().map(Vec::len));
     Ok(json!({
@@ -36,6 +45,7 @@ pub fn load_family(s: &mut Session, path: &str) -> Result<Value, String> {
         "category": read.family["category"],
         "types": count("types"),
         "parameters": count("parameters"),
+        "forms": count("forms").unwrap_or(0),
         "skipped": read.notes,
     }))
 }

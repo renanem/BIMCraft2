@@ -1,7 +1,11 @@
-"""Convert an API snapshot into BIMCraft's existing family commands (standard library only).
+"""Write what the Revit API said of each family as BIMCraft's exchange files (standard library only).
 
-This module has no dependency on Revit. Coordinates in the snapshot are millimetres.
-Run: python bridge.py snapshot.json NEW_OUTPUT_FOLDER
+This module has no dependency on Revit: script.py asks the API and hands a snapshot here. Each family becomes one
+`NNNN_name.rfa.json` file, format `bimcraft-revit-family` version 1, which BIMCraft reads (Insert > Revit Family, or
+`bimcraft-cli run project.bimc NNNN_name.rfa.json --save project.bimc`). BIMCraft, not this module, decides what a family
+there may hold: a parameter, a formula or a mesh its rules refuse is left out there, by name, in its import report.
+
+Lengths are millimetres, areas mm2, volumes mm3, angles degrees. Run: python bridge.py snapshot.json NEW_OUTPUT_FOLDER
 """
 from __future__ import print_function
 
@@ -12,18 +16,28 @@ import os
 import re
 import sys
 
-MAX_TRIANGLES = 20000
-MAX_TYPES = 256
-MAX_COORD = 100000000
-MAX_FILE = 128 * 1024 * 1024
-CATEGORIES = set("furniture casework plumbing drain pipefitting pipeaccessory equipment outlet switch lighting generic dataoutlet voiceoutlet patchpanel rack airterminal earthing inspectionbox".split())
+FORMAT = "bimcraft-revit-family"
+VERSION = 1
+MAX_TRIANGLES = 100000
+MAX_TYPES = 1000
+MAX_PARAMETERS = 2000
+MAX_COORD = 1000000000
+MAX_FILE = 256 * 1024 * 1024
+KINDS = set("length area volume angle number integer yesno text url material other".split())
+GROUPS = set("constraints construction dimensions graphics identity-data materials-and-finishes text visibility "
+             "electrical mechanical plumbing structural data other".split())
+OPTIONS = ("work_plane_based", "always_vertical", "cut_with_voids_when_loaded", "shared")
 LIMITATIONS = [
-    "Geometry is a triangulated snapshot for each exported type, in millimetres, not reconstructed parametric forms.",
-    "Revit formulas, constraints, connectors, instance parameters, materials, textures and 2D annotation are not converted.",
-    "Doors and windows become generic components: their hosts, openings and operation are not reconstructed.",
-    "The library script transfers loaded editable families and level names/elevations only. It does not convert an entire template.",
-    "System family types, view templates, filters, sheets, schedules, project/shared parameters, units and routing preferences are not converted.",
-    "Project instances and model geometry are not included in this library export; use the RVT/RTE or IFC importer separately.",
+    "Geometry is a triangulated snapshot of each exported type, in millimetres, not reconstructed parametric forms: "
+    "changing a parameter in BIMCraft does not reshape it.",
+    "Parameters come with their data type, instance or type, shared GUID, group and formula, and each type's values. "
+    "A formula is exported as Revit writes it; BIMCraft keeps the ones it reads and reports the others.",
+    "Reference planes, dimensions and constraints, connectors, materials, textures, nested families and 2D annotation "
+    "are not converted.",
+    "Doors and windows keep their category only where BIMCraft's own rule for one holds (length parameters Width and "
+    "Height); their hosts and openings are not reconstructed.",
+    "From a project, only loaded editable families and level names and elevations are exported. System family types, "
+    "view templates, filters, sheets, schedules, project and shared parameters, units and routing preferences are not.",
 ]
 
 try:
@@ -43,33 +57,72 @@ def name(value):
 def number(value):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("coordinates must be numbers in millimetres")
-    if abs(value) > MAX_COORD or math.isnan(value) or math.isinf(value):
+    if math.isnan(value) or math.isinf(value) or abs(value) > MAX_COORD:
         raise ValueError("coordinate is nonfinite or outside the bridge's range")
     return value
 
 
-def convert_family(source):
-    """One mesh per type, gated by a native numeric type parameter; no asset extraction."""
-    title = name(source["name"])
+def scalar(value):
+    """A parameter's value as JSON holds one: None, a boolean, text, or a finite number."""
+    if value is None or isinstance(value, bool) or isinstance(value, STRING_TYPES):
+        return value
+    if isinstance(value, (int, float)) and not (math.isnan(value) or math.isinf(value)):
+        return value
+    raise ValueError("a parameter's value must be text, yes or no, or a finite number")
+
+
+def export_parameter(source):
+    kind = source.get("kind", "other")
+    if kind not in KINDS:
+        raise ValueError("unknown parameter kind: %s" % kind)
+    result = {"name": name(source["name"]), "kind": kind}
+    if source.get("instance"):
+        result["instance"] = True
+    if source.get("reporting"):
+        result["reporting"] = True
+    for key in ("shared", "formula", "unit"):
+        value = source.get(key)
+        if isinstance(value, STRING_TYPES) and value.strip():
+            result[key] = value.strip()
+    if source.get("group") in GROUPS:
+        result["group"] = source["group"]
+    return result
+
+
+def export_family(source):
+    """One family as an exchange file's object. Raises ValueError for what no file should hold."""
     types = source.get("types", [])
     if not types or len(types) > MAX_TYPES:
         raise ValueError("a family needs 1 to %s types" % MAX_TYPES)
-    category = source.get("category", "generic")
-    if category not in CATEGORIES:
-        category = "generic"
-    selector = "Imported Type"
-    result = {"name": title, "category": category,
-              "parameters": [{"name": selector, "kind": "number", "value": 0}],
-              "types": {}, "forms": []}
+    parameters = source.get("parameters", [])
+    if len(parameters) > MAX_PARAMETERS:
+        raise ValueError("more than %s parameters" % MAX_PARAMETERS)
+    result = {"format": FORMAT, "version": VERSION, "name": name(source["name"]),
+              "category": source.get("category") if isinstance(source.get("category"), STRING_TYPES) else "",
+              "parameters": [], "types": [],
+              "notes": [note for note in source.get("notes", []) if isinstance(note, STRING_TYPES)]}
+    options = source.get("options", {})
+    kept = dict((key, options[key]) for key in OPTIONS if isinstance(options.get(key), bool))
+    if kept:
+        result["options"] = kept
+    seen = set()
+    for parameter in parameters:
+        exported = export_parameter(parameter)
+        if exported["name"] in seen:
+            raise ValueError("duplicate parameter: " + exported["name"])
+        seen.add(exported["name"])
+        result["parameters"].append(exported)
+    seen = set()
     total = 0
-    for index, item in enumerate(types):
+    for item in types:
         type_name = name(item["name"])
-        if type_name in result["types"]:
+        if type_name in seen:
             raise ValueError("duplicate family type: " + type_name)
+        seen.add(type_name)
         triangles = item.get("triangles", [])
         total += len(triangles)
-        if not triangles or total > MAX_TRIANGLES:
-            raise ValueError("empty geometry or more than %s triangles per family" % MAX_TRIANGLES)
+        if total > MAX_TRIANGLES:
+            raise ValueError("more than %s triangles per family" % MAX_TRIANGLES)
         for triangle in triangles:
             if len(triangle) != 3:
                 raise ValueError("a triangle needs three vertices")
@@ -78,8 +131,8 @@ def convert_family(source):
                     raise ValueError("a vertex needs three coordinates")
                 for value in vertex:
                     number(value)
-        result["types"][type_name] = {selector: index}
-        result["forms"].append({"mesh": triangles, "visible": "Imported Type = %s" % index})
+        values = dict((name(key), scalar(value)) for key, value in item.get("values", {}).items())
+        result["types"].append({"name": type_name, "values": values, "triangles": triangles})
     return result
 
 
@@ -93,31 +146,29 @@ def write_text(path, text):
 
 
 def write_bundle(snapshot, destination):
-    """Never overwrite a previous export. Scripts embed definitions, not machine-specific paths."""
+    """Never overwrite a previous export: `families/NNNN_name.rfa.json`, `project.txt` (the levels) and `report.json`."""
     destination = str(destination)
-    os.makedirs(destination)
-    report = {"converted": [], "failed": [], "notes": snapshot.get("notes", []),
+    os.makedirs(os.path.join(destination, "families"))
+    report = {"exported": [], "failed": [], "files": [], "notes": snapshot.get("notes", []),
               "limitations": LIMITATIONS, "source": snapshot.get("title", "Revit")}
-    commands = []
     seen = set()
-    encoded_size = 0
     for index, source in enumerate(snapshot.get("families", [])):
         try:
-            family = convert_family(source)
+            family = export_family(source)
             if family["name"] in seen:
                 raise ValueError("duplicate family name")
             encoded = encode(family)
-            size = len(encoded.encode("utf-8")) + 8
-            if encoded_size + size > MAX_FILE:
-                raise ValueError("library script would exceed 128 MiB")
+            if len(encoded.encode("utf-8")) > MAX_FILE:
+                raise ValueError("the family's export would exceed 256 MiB")
             safe = re.sub(r'[^\w.-]', "_", family["name"], flags=re.UNICODE)[:80]
-            write_text(os.path.join(destination, "%04d_%s.json" % (index, safe)), encoded + "\n")
+            file_name = "%04d_%s.rfa.json" % (index, safe)
+            write_text(os.path.join(destination, "families", file_name), encoded + "\n")
             seen.add(family["name"])
-            encoded_size += size
-            commands.append("family " + encoded)
-            report["converted"].append(family["name"])
-        except (ValueError, KeyError, TypeError) as error:
-            report["failed"].append({"family": source.get("name", "?"), "reason": str(error)})
+            report["exported"].append(family["name"])
+            report["files"].append("families/" + file_name)
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            failed = source.get("name", "?") if isinstance(source, dict) else "?"
+            report["failed"].append({"family": failed, "reason": str(error)})
     # Apply to a fresh project only: this script changes its two starter levels by their documented IDs.
     project = ["new " + encode({"name": name(snapshot.get("title", "Revit library"))})]
     levels = sorted(snapshot.get("levels", []), key=lambda item: number(item["elevation"]))
@@ -128,10 +179,9 @@ def write_bundle(snapshot, destination):
             project.append("modify " + encode(values))
         else:
             project.append("level " + encode(values))
-    project.extend(commands)
-    write_text(os.path.join(destination, "library.txt"), "\n".join(commands) + "\n")
     write_text(os.path.join(destination, "project.txt"), "\n".join(project) + "\n")
-    write_text(os.path.join(destination, "report.json"), json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n")
+    write_text(os.path.join(destination, "report.json"),
+               json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n")
     return report
 
 
@@ -139,8 +189,8 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         sys.exit("Usage: python bridge.py snapshot.json NEW_OUTPUT_FOLDER")
     if os.path.getsize(sys.argv[1]) > MAX_FILE:
-        sys.exit("Snapshot exceeds 128 MiB")
+        sys.exit("Snapshot exceeds 256 MiB")
     with io.open(sys.argv[1], encoding="utf-8") as stream:
         snapshot = json.load(stream)
     result = write_bundle(snapshot, sys.argv[2])
-    print("Converted %s families; %s failures. Read report.json." % (len(result["converted"]), len(result["failed"])))
+    print("Exported %s families; %s failures. Read report.json." % (len(result["exported"]), len(result["failed"])))

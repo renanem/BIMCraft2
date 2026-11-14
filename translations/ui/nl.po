@@ -64,15 +64,15 @@ msgstr ""
 msgid "1 page"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:239
+#: crates/ui-egui/src/revit_family.rs:241
 msgid "1 parameter"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:238
+#: crates/ui-egui/src/revit_family.rs:240
 msgid "1 type"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:114
+#: crates/ui-egui/src/revit_family.rs:115
 msgid "1 type: {}"
 msgstr ""
 
@@ -225,7 +225,7 @@ msgstr "Een deur of een raam staat in zijn muur: het kan niet op een werkvlak ge
 msgid "A family file, to edit."
 msgstr "Een familiebestand, om te bewerken."
 
-#: crates/ui-egui/src/revit_family.rs:147
+#: crates/ui-egui/src/revit_family.rs:148
 msgid "A family needs a name."
 msgstr ""
 
@@ -726,7 +726,7 @@ msgid "Air Terminal (AT): a captor, where you click on the roof; Space turns it"
 msgstr "Vangstaaf (AT): een opvangpunt, waar je op het dak klikt; met de spatiebalk draai je het"
 
 #: crates/ui-egui/src/editor.rs:945
-#: crates/ui-egui/src/revit_family.rs:74
+#: crates/ui-egui/src/revit_family.rs:75
 msgid "Air Terminals"
 msgstr "Vangstaven"
 
@@ -955,7 +955,7 @@ msgstr "En:"
 #: crates/ui-egui/src/parameters.rs:34
 #: crates/ui-egui/src/parameters.rs:47
 #: crates/ui-egui/src/reinforce.rs:83
-#: crates/ui-egui/src/revit_family.rs:51
+#: crates/ui-egui/src/revit_family.rs:52
 msgid "Angle"
 msgstr "Hoek"
 
@@ -1120,7 +1120,7 @@ msgstr ""
 #: crates/core/src/schedule.rs:244
 #: crates/ui-egui/src/editor.rs:268
 #: crates/ui-egui/src/parameters.rs:32
-#: crates/ui-egui/src/revit_family.rs:52
+#: crates/ui-egui/src/revit_family.rs:53
 msgid "Area"
 msgstr "Oppervlakte"
 
@@ -1798,7 +1798,7 @@ msgstr "Camera: klik waar het oog staat en dan waar het naar kijkt: een 3D-weerg
 #: crates/ui-egui/src/publisher.rs:967
 #: crates/ui-egui/src/purge.rs:77
 #: crates/ui-egui/src/reinforce.rs:536
-#: crates/ui-egui/src/revit_family.rs:312
+#: crates/ui-egui/src/revit_family.rs:314
 #: crates/ui-egui/src/shortcuts.rs:412
 #: crates/ui-egui/src/shortcuts.rs:540
 #: crates/ui-egui/src/standards.rs:334
@@ -1859,7 +1859,7 @@ msgid "Casement Window"
 msgstr "Draairaam"
 
 #: crates/ui-egui/src/editor.rs:937
-#: crates/ui-egui/src/revit_family.rs:66
+#: crates/ui-egui/src/revit_family.rs:67
 msgid "Casework"
 msgstr "Meubilair en kasten"
 
@@ -3231,7 +3231,7 @@ msgstr ""
 
 #: crates/ui-egui/src/plugins.rs:255
 #: crates/ui-egui/src/revit.rs:262
-#: crates/ui-egui/src/revit_family.rs:314
+#: crates/ui-egui/src/revit_family.rs:316
 msgid "Copied"
 msgstr "Gekopieerd"
 
@@ -3305,7 +3305,7 @@ msgid "Copy IFC GlobalIds"
 msgstr "IFC-GlobalId's kopiëren"
 
 #: crates/ui-egui/src/revit.rs:262
-#: crates/ui-egui/src/revit_family.rs:314
+#: crates/ui-egui/src/revit_family.rs:316
 msgid "Copy Report"
 msgstr "Rapport kopiëren"
 
@@ -3382,7 +3382,7 @@ msgstr "Kon {} niet openen: {}"
 msgid "Couldn't print: {}"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:210
+#: crates/ui-egui/src/revit_family.rs:212
 msgid "Couldn't read {}: {}"
 msgstr ""
 
@@ -3672,7 +3672,7 @@ msgstr "Dataconnector"
 msgid "Data Connector: where a data cable meets the family"
 msgstr "Dataconnector: waar een datakabel op de familie aansluit"
 
-#: crates/ui-egui/src/revit_family.rs:75
+#: crates/ui-egui/src/revit_family.rs:76
 msgid "Data Devices"
 msgstr ""
 
@@ -3688,7 +3688,7 @@ msgstr "Data-aansluiting (DT): een datapunt, waar je op de muur klikt; met de sp
 msgid "Data Outlets"
 msgstr "Data-aansluitingen"
 
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 msgid "Data Type"
 msgstr ""
 
@@ -4285,7 +4285,7 @@ msgstr "Deur (DR): klik op een muur"
 msgid "Door Schedule"
 msgstr "Deurenlijst"
 
-#: crates/ui-egui/src/revit_family.rs:77
+#: crates/ui-egui/src/revit_family.rs:78
 msgid "Doors"
 msgstr ""
 
@@ -4736,7 +4736,7 @@ msgid "Electrical Ceiling"
 msgstr ""
 
 #: crates/ui-egui/src/editor.rs:942
-#: crates/ui-egui/src/revit_family.rs:70
+#: crates/ui-egui/src/revit_family.rs:71
 msgid "Electrical Equipment"
 msgstr "Elektrische uitrusting"
 
@@ -4744,7 +4744,7 @@ msgstr "Elektrische uitrusting"
 msgid "Electrical Equipment (EE): a distribution board, where you click on the wall; Space turns it"
 msgstr "Elektrische uitrusting (EE): een verdeelbord, waar je op de muur klikt; met de spatiebalk draai je het"
 
-#: crates/ui-egui/src/revit_family.rs:71
+#: crates/ui-egui/src/revit_family.rs:72
 msgid "Electrical Fixtures"
 msgstr ""
 
@@ -5144,7 +5144,7 @@ msgid "Family Parameters"
 msgstr "Familieparameters"
 
 #: crates/ui-egui/src/editor.rs:271
-#: crates/ui-egui/src/revit_family.rs:57
+#: crates/ui-egui/src/revit_family.rs:58
 msgid "Family Type"
 msgstr ""
 
@@ -5725,7 +5725,7 @@ msgid "Function"
 msgstr "Functie"
 
 #: crates/ui-egui/src/editor.rs:936
-#: crates/ui-egui/src/revit_family.rs:65
+#: crates/ui-egui/src/revit_family.rs:66
 msgid "Furniture"
 msgstr "Meubilair"
 
@@ -5769,7 +5769,7 @@ msgstr "Schuifafsluiter"
 msgid "Generic"
 msgstr "Generiek"
 
-#: crates/ui-egui/src/revit_family.rs:79
+#: crates/ui-egui/src/revit_family.rs:80
 msgid "Generic Models"
 msgstr ""
 
@@ -6190,7 +6190,7 @@ msgstr ""
 #: crates/ui-egui/src/editor/document.rs:582
 #: crates/ui-egui/src/lib.rs:4900
 #: crates/ui-egui/src/parameters.rs:1128
-#: crates/ui-egui/src/revit_family.rs:313
+#: crates/ui-egui/src/revit_family.rs:315
 msgid "Import"
 msgstr "Importeren"
 
@@ -6215,7 +6215,7 @@ msgstr "CAD importeren: een DWG- of DXF-tekening in het project gebracht, onder 
 msgid "Import DXF…"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:263
+#: crates/ui-egui/src/revit_family.rs:265
 msgid "Import Revit Family"
 msgstr ""
 
@@ -6250,7 +6250,7 @@ msgstr "Geïmporteerde categorieën"
 msgid "Imported from this file"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:234
+#: crates/ui-egui/src/revit_family.rs:236
 msgid "Imported the family {} from {}: {}, {}."
 msgstr ""
 
@@ -6414,7 +6414,7 @@ msgstr "Isolatie: dekenisolatie getekend langs elke lijn, zijn breedte in de opt
 
 #: crates/ui-egui/src/editor.rs:267
 #: crates/ui-egui/src/parameters.rs:30
-#: crates/ui-egui/src/revit_family.rs:50
+#: crates/ui-egui/src/revit_family.rs:51
 msgid "Integer"
 msgstr ""
 
@@ -6802,7 +6802,7 @@ msgstr "Je AI-sleutel uitlenen?"
 #: crates/ui-egui/src/linestyles/creator.rs:149
 #: crates/ui-egui/src/parameters.rs:31
 #: crates/ui-egui/src/parameters.rs:45
-#: crates/ui-egui/src/revit_family.rs:48
+#: crates/ui-egui/src/revit_family.rs:49
 msgid "Length"
 msgstr "Lengte"
 
@@ -6882,7 +6882,7 @@ msgstr "Licht"
 msgid "Lighting"
 msgstr "Verlichting"
 
-#: crates/ui-egui/src/revit_family.rs:72
+#: crates/ui-egui/src/revit_family.rs:73
 msgid "Lighting Devices"
 msgstr ""
 
@@ -6894,7 +6894,7 @@ msgstr "Lichtarmatuur"
 msgid "Lighting Fixture (LF): a luminaire, where you click, hung from the slab; Space turns it"
 msgstr "Lichtarmatuur (LF): een armatuur, waar je klikt, opgehangen aan de plaat; met de spatiebalk draai je het"
 
-#: crates/ui-egui/src/revit_family.rs:73
+#: crates/ui-egui/src/revit_family.rs:74
 msgid "Lighting Fixtures"
 msgstr ""
 
@@ -7507,7 +7507,7 @@ msgstr "Eigenschappen overgenomen: type '{}' toegepast op {} element(en)"
 #: crates/ui-egui/src/properties.rs:2815
 #: crates/ui-egui/src/properties.rs:2956
 #: crates/ui-egui/src/properties.rs:3148
-#: crates/ui-egui/src/revit_family.rs:55
+#: crates/ui-egui/src/revit_family.rs:56
 msgid "Material"
 msgstr "Materiaal"
 
@@ -8070,7 +8070,7 @@ msgstr "NIET OMSLOTEN"
 #: crates/ui-egui/src/properties.rs:2486
 #: crates/ui-egui/src/properties.rs:2970
 #: crates/ui-egui/src/properties.rs:3863
-#: crates/ui-egui/src/revit_family.rs:268
+#: crates/ui-egui/src/revit_family.rs:270
 #: crates/ui-egui/src/titleblocks.rs:597
 #: crates/ui-egui/src/workplane.rs:294
 msgid "Name"
@@ -8241,7 +8241,7 @@ msgstr "Nieuw: {}"
 
 #: crates/core/src/schedule.rs:1321
 #: crates/ui-egui/src/properties.rs:892
-#: crates/ui-egui/src/revit_family.rs:130
+#: crates/ui-egui/src/revit_family.rs:131
 msgid "No"
 msgstr "Neen"
 
@@ -8494,7 +8494,7 @@ msgstr "Notitie:"
 
 #: crates/ui-egui/src/revit.rs:84
 #: crates/ui-egui/src/revit.rs:252
-#: crates/ui-egui/src/revit_family.rs:300
+#: crates/ui-egui/src/revit_family.rs:302
 msgid "Noted"
 msgstr "Genoteerd"
 
@@ -8550,7 +8550,7 @@ msgstr ""
 #: crates/ui-egui/src/adaptive_editor.rs:627
 #: crates/ui-egui/src/parameters.rs:29
 #: crates/ui-egui/src/parameters.rs:46
-#: crates/ui-egui/src/revit_family.rs:49
+#: crates/ui-egui/src/revit_family.rs:50
 msgid "Number"
 msgstr "Nummer"
 
@@ -9057,7 +9057,7 @@ msgstr "Evenwijdige lijnen onder een hoek en met een tussenafstand, al dan niet 
 #: crates/ui-egui/src/parameters.rs:746
 #: crates/ui-egui/src/parameters.rs:1178
 #: crates/ui-egui/src/parameters.rs:1611
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 #: crates/ui-egui/src/templates.rs:567
 #: crates/ui-egui/src/typeprops.rs:164
 msgid "Parameter"
@@ -9588,7 +9588,7 @@ msgstr "Leiding"
 msgid "Pipe (PI): click its start and its end; a chain of clicks makes a pipe for each step"
 msgstr "Leiding (PI): klik op het begin en het einde; een reeks klikken maakt een leiding voor elke stap"
 
-#: crates/ui-egui/src/revit_family.rs:69
+#: crates/ui-egui/src/revit_family.rs:70
 msgid "Pipe Accessories"
 msgstr ""
 
@@ -9616,7 +9616,7 @@ msgstr "Leidingfitting"
 msgid "Pipe Fitting (PF): an elbow or a tee, where you click on a pipe's height; Space turns it"
 msgstr "Leidingfitting (PF): een bocht of een T-stuk, waar je klikt op de hoogte van een leiding; met de spatiebalk draai je het"
 
-#: crates/ui-egui/src/revit_family.rs:68
+#: crates/ui-egui/src/revit_family.rs:69
 msgid "Pipe Fittings"
 msgstr ""
 
@@ -9926,7 +9926,7 @@ msgid "Plumbing Fixture (PX): a basin, a WC, a sink, a shower or a drain, where 
 msgstr "Sanitair toestel (PX): een wastafel, een WC, een spoelbak, een douche of een afvoer, waar je klikt; met de spatiebalk draai je het"
 
 #: crates/ui-egui/src/editor.rs:938
-#: crates/ui-egui/src/revit_family.rs:67
+#: crates/ui-egui/src/revit_family.rs:68
 msgid "Plumbing Fixtures"
 msgstr "Sanitaire toestellen"
 
@@ -10979,7 +10979,7 @@ msgstr ""
 msgid "Revit Family: a .rfa file's types and their parameters brought into the project as a family, after a look at what the file gives and what it does not"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:181
+#: crates/ui-egui/src/revit_family.rs:183
 msgid "Revit family"
 msgstr ""
 
@@ -11694,8 +11694,8 @@ msgstr ""
 
 #: crates/ui-egui/src/coordinates.rs:1506
 #: crates/ui-egui/src/editor/options.rs:19
-#: crates/ui-egui/src/revit_family.rs:164
-#: crates/ui-egui/src/revit_family.rs:293
+#: crates/ui-egui/src/revit_family.rs:165
+#: crates/ui-egui/src/revit_family.rs:295
 msgid "Shared"
 msgstr "Gedeeld"
 
@@ -12849,7 +12849,7 @@ msgstr "Technische normen: stel tekennormen in (NBR, ISO, ANSI, EU); nu {}"
 msgid "Tee"
 msgstr "T-stuk"
 
-#: crates/ui-egui/src/revit_family.rs:76
+#: crates/ui-egui/src/revit_family.rs:77
 msgid "Telephone Devices"
 msgstr ""
 
@@ -12913,7 +12913,7 @@ msgstr ""
 #: crates/ui-egui/src/notes.rs:503
 #: crates/ui-egui/src/parameters.rs:28
 #: crates/ui-egui/src/parameters.rs:44
-#: crates/ui-egui/src/revit_family.rs:58
+#: crates/ui-egui/src/revit_family.rs:59
 #: crates/ui-egui/src/titleblocks.rs:199
 #: crates/ui-egui/src/titleblocks.rs:263
 #: crates/ui-egui/src/titleblocks.rs:465
@@ -13160,7 +13160,7 @@ msgstr "De familie {} die je laadt, staat al in deze familie, maar is anders ged
 msgid "The family {} you are loading is already in this project, defined differently. What would you like to do?"
 msgstr "De familie {} die je laadt, staat al in dit project, maar is anders gedefinieerd. Wat wil je doen?"
 
-#: crates/ui-egui/src/revit_family.rs:279
+#: crates/ui-egui/src/revit_family.rs:281
 msgid "The file lists no parameters."
 msgstr ""
 
@@ -13273,7 +13273,7 @@ msgstr "Het profiel kruist de aslijn: teken het aan één kant van de as."
 msgid "The project changed while this window was open: Cancel, and open it again."
 msgstr "Het project is gewijzigd terwijl dit venster open stond: annuleer en open het opnieuw."
 
-#: crates/ui-egui/src/revit_family.rs:149
+#: crates/ui-egui/src/revit_family.rs:150
 msgid "The project has a family named {} already: give this one another name."
 msgstr ""
 
@@ -13996,7 +13996,7 @@ msgid "UP"
 msgstr "OMHOOG"
 
 #: crates/ui-egui/src/editor.rs:270
-#: crates/ui-egui/src/revit_family.rs:56
+#: crates/ui-egui/src/revit_family.rs:57
 msgid "URL"
 msgstr ""
 
@@ -14230,7 +14230,7 @@ msgstr ""
 #: crates/ui-egui/src/editor/document.rs:1727
 #: crates/ui-egui/src/editor/types_dialog.rs:261
 #: crates/ui-egui/src/parameters.rs:1312
-#: crates/ui-egui/src/revit_family.rs:283
+#: crates/ui-egui/src/revit_family.rs:285
 #: crates/ui-egui/src/templates.rs:567
 #: crates/ui-egui/src/titleblocks.rs:142
 #: crates/ui-egui/src/typeprops.rs:164
@@ -14505,7 +14505,7 @@ msgstr "Spanningen"
 #: crates/core/src/schedule.rs:220
 #: crates/ui-egui/src/editor.rs:269
 #: crates/ui-egui/src/parameters.rs:33
-#: crates/ui-egui/src/revit_family.rs:53
+#: crates/ui-egui/src/revit_family.rs:54
 msgid "Volume"
 msgstr "Volume"
 
@@ -14727,7 +14727,7 @@ msgstr "Ramenlijst"
 
 #: crates/ui-egui/src/editor/document.rs:592
 #: crates/ui-egui/src/lang.rs:34
-#: crates/ui-egui/src/revit_family.rs:78
+#: crates/ui-egui/src/revit_family.rs:79
 msgid "Windows"
 msgstr "Ramen"
 
@@ -14888,14 +14888,14 @@ msgstr ""
 
 #: crates/core/src/schedule.rs:1321
 #: crates/ui-egui/src/properties.rs:891
-#: crates/ui-egui/src/revit_family.rs:130
+#: crates/ui-egui/src/revit_family.rs:131
 msgid "Yes"
 msgstr "Ja"
 
 #: crates/ui-egui/src/editor.rs:264
 #: crates/ui-egui/src/parameters.rs:35
 #: crates/ui-egui/src/parameters.rs:48
-#: crates/ui-egui/src/revit_family.rs:54
+#: crates/ui-egui/src/revit_family.rs:55
 msgid "Yes/No"
 msgstr "Ja/nee"
 
@@ -15877,7 +15877,7 @@ msgstr "{} opende een ander project"
 msgid "{} opened without {} fields this version doesn't know; saving it leaves them out."
 msgstr "{} geopend zonder {} velden die deze versie niet kent; bij het opslaan vallen ze weg."
 
-#: crates/ui-egui/src/revit_family.rs:239
+#: crates/ui-egui/src/revit_family.rs:241
 msgid "{} parameters"
 msgstr ""
 
@@ -15938,11 +15938,11 @@ msgstr "{} stopte de assistent"
 msgid "{} triangles, from a file"
 msgstr "{} driehoeken, uit een bestand"
 
-#: crates/ui-egui/src/revit_family.rs:238
+#: crates/ui-egui/src/revit_family.rs:240
 msgid "{} types"
 msgstr ""
 
-#: crates/ui-egui/src/revit_family.rs:115
+#: crates/ui-egui/src/revit_family.rs:116
 msgid "{} types: {}"
 msgstr ""
 
@@ -16091,7 +16091,7 @@ msgid "{}: in the 3D view its points go on a level face (the top of a floor, a c
 msgstr "{}: in de 3D-weergave komen de punten op een horizontaal vlak (de bovenkant van een vloer, een kolom, een plat dak of een niveau): wijs er een aan"
 
 #: crates/ui-egui/src/revit.rs:138
-#: crates/ui-egui/src/revit_family.rs:191
+#: crates/ui-egui/src/revit_family.rs:193
 msgid "{}: this build of BIMCraft was made without Revit support (`--no-default-features`); build with the default `rvt` feature to read Revit files"
 msgstr "{}: deze build van BIMCraft is gemaakt zonder ondersteuning voor Revit (`--no-default-features`); bouw met de standaardfunctie `rvt` om Revit-bestanden te lezen"
 

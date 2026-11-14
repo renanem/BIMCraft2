@@ -139,6 +139,7 @@ fn the_fence_is_written_into_the_policy_documents() {
 mod columns;
 mod decoders;
 mod ducts;
+mod exchange;
 mod family;
 mod floors;
 mod framing;
