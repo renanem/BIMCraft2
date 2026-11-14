@@ -228,6 +228,8 @@ pub mod storm;
 mod stream_tests;
 pub mod styles;
 pub mod symbol_set;
+#[cfg(test)]
+mod template_tests;
 pub mod text;
 pub mod texture;
 mod timber;

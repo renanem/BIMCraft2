@@ -6299,6 +6299,7 @@ mod links;
 mod look;
 mod mep;
 mod minimap;
+mod newproject;
 mod notes;
 mod objectstyles;
 mod origin;

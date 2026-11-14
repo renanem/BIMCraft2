@@ -188,6 +188,8 @@ fn main() -> ExitCode {
     // The recent files sit beside the favorites too; the files the arguments opened are the newest.
     if let Some(path) = &favorites {
         app.keep_recent_in(bimcraft_ui_egui::recent::beside(path));
+        // The project templates New Project offers sit there too.
+        app.keep_templates_in(bimcraft_ui_egui::newproject::beside(path));
         for file in &opened {
             app.note_recent(file);
         }

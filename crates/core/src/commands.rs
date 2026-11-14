@@ -101,9 +101,14 @@ pub static ALL: &[Command] = &[
     other(
         "new",
         "New",
-        "{name?, language?: en|pt|es|sv|cs|fr|de|nl|it|pl|vi} an empty project with Level 1 (0) and Level 2 (3000), named in its \
+        "{name?, language?: en|pt|es|sv|cs|fr|de|nl|it|pl|vi, template?: path} an empty project with Level 1 (0) and Level 2 (3000), named in its \
          language (Nível 1, Nível 2 in Portuguese; Nivel 1, Nivel 2 in Spanish; Nivå 1, Nivå 2 in Swedish; Niveau 1, Niveau 2 in \
-         Dutch; Tầng 1, Tầng 2 in Vietnamese)",
+         Dutch; Tầng 1, Tầng 2 in Vietnamese). With `template`, a .bimt file (or a project, .bimc), the new project starts as the \
+         template is instead, as Revit's New > Project from a template file: its levels and elements, families and types, view \
+         templates, filters, styles, patterns, phases, parameters and sheets, read as `open` reads a project (the same \
+         `left_out`, `warnings` and `renamed`), under `name` (else Project in its language), in the template's language \
+         unless `language` says another (which names what is made from then on, and renames nothing), with an identity of \
+         its own and no file: saving it asks where, and the template is never written",
         new,
     ),
 other_files(
@@ -3786,13 +3791,41 @@ fn ext(p: &Path) -> String {
 
 fn new(s: &mut Session, p: &Value) -> R {
     let c = "new";
-    let language = match string(c, p, "language")? {
-        Some(code) => language_param(c, &code)?,
-        None => Language::English,
-    };
-    let name = string(c, p, "name")?.unwrap_or_else(|| language.word("Project").into());
+    let language = string(c, p, "language")?.map(|code| language_param(c, &code)).transpose()?;
+    let name = string(c, p, "name")?;
+    if let Some(template) = p.get("template").filter(|v| !v.is_null()) {
+        return new_from_template(s, template, name, language);
+    }
+    let language = language.unwrap_or(Language::English);
+    let name = name.unwrap_or_else(|| language.word("Project").into());
     s.reset(Model::new_in(&name, language), None);
     Ok(json!({"name": name, "language": language.code()}))
+}
+
+/// `new {template}`: the project the template's file holds, read as `open` reads one, made a project of its own: named
+/// anew, with an identity of its own (two projects of one template export different IFC GlobalIds), no file (so a save
+/// asks where, and never writes the template) and no history.
+fn new_from_template(s: &mut Session, template: &Value, name: Option<String>, language: Option<Language>) -> R {
+    let c = "new";
+    let path = template.as_str().filter(|t| !t.trim().is_empty()).ok_or_else(|| bad(c, "`template` is the path of a .bimt file"))?;
+    if !crate::files::is_project(Path::new(path)) {
+        return Err(bad(c, format!("{path} is no template: `template` takes a .bimt file, or a project (.bimc) to start from as one")));
+    }
+    let mut reply = open_file(s, &json!({ "path": path })).map_err(|e| e.replacen("open:", "new:", 1))?;
+    let language = language.unwrap_or(s.model.language);
+    let name = name.unwrap_or_else(|| language.word("Project").into());
+    let mut model = (*s.model).clone();
+    model.name = name.clone();
+    model.language = language;
+    model.renew_uid();
+    s.reset(model, None);
+    reply["name"] = json!(name);
+    reply["language"] = json!(language.code());
+    reply["template"] = json!(path);
+    if let Some(fields) = reply.as_object_mut() {
+        fields.remove("path");
+    }
+    Ok(with_links(s, reply))
 }
 
 fn language_param(c: &str, code: &str) -> Result<Language, String> {

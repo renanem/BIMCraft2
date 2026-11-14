@@ -54,6 +54,7 @@ mod mep;
 mod mesh;
 mod minimap;
 mod motion;
+pub mod newproject;
 mod notes;
 mod objectstyles;
 mod opening;
@@ -380,6 +381,8 @@ fn tab_key(tab: Tab) -> u64 {
 enum Pending {
     Recover(bimcraft_core::autosave::Backup),
     New,
+    /// New Project's dialog, which asks for a template file.
+    NewFromTemplate,
     Open,
     /// The sample house, as a project nobody has saved ([`bimcraft_core::sample::SAMPLE`]).
     Sample,
@@ -869,6 +872,11 @@ pub struct BimApp {
     /// The files File > Open Recent lists, and where they are kept (see [`BimApp::keep_recent_in`]; none until the app is told).
     recent: recent::Recent,
     recent_path: Option<std::path::PathBuf>,
+    /// The project templates New Project offers, and where they are kept (see [`BimApp::keep_templates_in`]; none until told).
+    pub(crate) project_templates: recent::Recent,
+    project_templates_path: Option<std::path::PathBuf>,
+    /// File > New > Project from Template…'s dialog, while it is up.
+    pub(crate) new_project: Option<newproject::NewProject>,
     /// The start page: up when the window opens on no project, and from the quick access bar's Home.
     home: start::Home,
     parameter_manager: Option<parameters::ParameterManager>,
@@ -1649,6 +1657,9 @@ impl BimApp {
             favorites_path: None,
             recent: recent::Recent::default(),
             recent_path: None,
+            project_templates: recent::Recent::default(),
+            project_templates_path: None,
+            new_project: None,
             home: start::Home::default(),
             paint_material: String::new(),
             parameter_manager: None,
@@ -2329,6 +2340,7 @@ impl BimApp {
             || self.importing()
             || self.report_open()
             || self.revit_family_open()
+            || self.new_project.is_some()
             || self.export_dialog.as_ref().is_some_and(|d| !d.picking)
             // An open menu takes the keys: Esc closes it, not the tool.
             || egui::Popup::is_any_open(ctx)
@@ -3686,6 +3698,10 @@ impl BimApp {
         if saved && !matches!(ext.as_str(), "ifc" | "glb" | "pdf") {
             self.saved = Arc::clone(&self.session.model);
             self.note_recent(path);
+            // A template saved is one New Project offers from now on.
+            if ext == files::TEMPLATE {
+                self.note_template(path);
+            }
             self.autosave_saved();
         }
         saved
@@ -3834,6 +3850,8 @@ impl BimApp {
         (fresh.bench, fresh.opening) = (self.bench.take(), self.opening.take());
         fresh.swapping = std::mem::take(&mut self.swapping);
         (fresh.recent, fresh.recent_path) = (std::mem::take(&mut self.recent), self.recent_path.take());
+        fresh.project_templates = std::mem::take(&mut self.project_templates);
+        fresh.project_templates_path = self.project_templates_path.take();
         fresh.autosave = std::mem::take(&mut self.autosave);
         fresh.card = std::mem::take(&mut self.card);
         fresh.home = self.home.put_away();
@@ -3902,6 +3920,7 @@ impl BimApp {
                     self.autosave_document();
                 }
             }
+            Pending::NewFromTemplate => self.open_new_project(),
             Pending::Sample => self.open_sample(),
             Pending::OpenPath(path) => {
                 self.open_path(&path);
@@ -4303,6 +4322,9 @@ impl BimApp {
         SubMenuButton::new(t("New")).ui(ui, |ui| {
             if item(ui, msg!("Project"), cmd(Key::N)) {
                 self.guard(Pending::New, ctx);
+            }
+            if item(ui, msg!("Project from Template…"), None) {
+                self.guard(Pending::NewFromTemplate, ctx);
             }
             if item(ui, msg!("Family…"), None) {
                 self.new_family_dialog = Some(bimcraft_core::family::Category::Generic);
@@ -6384,6 +6406,7 @@ impl BimApp {
         self.opening_box(ctx);
         self.report_window(ctx);
         self.revit_family_window(ctx);
+        self.new_project_window(ctx);
         self.export_window(ctx);
         self.publisher_window(ctx);
         self.print_sets_window(ctx);

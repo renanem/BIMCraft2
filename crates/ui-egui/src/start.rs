@@ -129,6 +129,8 @@ fn ago(when: SystemTime) -> String {
 /// What a click on the page asks for, done once it's drawn.
 enum Click {
     New,
+    /// New Project's dialog, which asks for a template file.
+    NewFromTemplate,
     Open,
     /// The start page's New Family: a family of the category picked, in its document.
     NewFamily(bimcraft_core::family::Category),
@@ -264,6 +266,11 @@ impl BimApp {
         let Some(click) = click else { return };
         match click {
             Click::New => self.guard(Pending::New, &ctx),
+            Click::NewFromTemplate => {
+                // The dialog is the window's, over the project: the page steps aside for it.
+                self.home.shown = false;
+                self.guard(Pending::NewFromTemplate, &ctx);
+            }
             Click::Open => self.guard(Pending::Open, &ctx),
             Click::NewFamily(c) => {
                 self.new_family(c);
@@ -309,7 +316,16 @@ impl BimApp {
 
     /// Models (New, Open, the sample and back to the project open behind the page) and Families (New and Open), as Revit's Home.
     fn start_actions(&self, ui: &mut Ui, click: &mut Option<Click>) {
-        heading(ui, msg!("Models"));
+        // New Project's dialog, which asks for a template file, is a link on the heading's own line: the page keeps its height.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(t(msg!("Models")).to_uppercase()).size(12.0).strong().color(pal().muted).extra_letter_spacing(1.2));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.link(t("New from Template")).on_hover_text(t("A project that starts as a template file is.")).clicked() {
+                    *click = Some(Click::NewFromTemplate);
+                }
+            });
+        });
+        ui.add_space(10.0);
         let cmd = if cfg!(target_os = "macos") { "⌘" } else { "Ctrl+" };
         if action(ui, Icon::NewFile, msg!("New Project"), msg!("An empty project to model in."), &format!("{cmd}N")).clicked() {
             *click = Some(Click::New);

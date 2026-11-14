@@ -740,3 +740,14 @@ samples are the ones to fix. Measured with it on the annotated 100-storey tower 
 File > Settings > Files has **Compressed save** (a tick in the File menu too), off at first and kept in `settings.json`: on, Save
 and Save As write the project as `save {compress: true}` does, its JSON in a zip (`bimcraft_core::bimc`), several times smaller
 and slower to save and open, as the box says; off, plain JSON. Exports take no such choice, and Open reads either.
+
+New Project (`newproject.rs`): File > New > Project from Template… and the start page's New from Template open the dialog
+Revit's New > Project has, after the same question about unsaved changes New asks (`Pending::NewFromTemplate`). Its Template
+file list is <None> (an empty project, in the interface's language) and the templates the window knows, newest first and the
+newest picked: the `.bimt` files saved from this window (`save_to` notes one) or reached with Browse… (which also takes a
+`.bimc`), kept in `templates.json` beside the recent files (`BimApp::keep_templates_in`, `recent::Recent`'s list and file
+layout; a window never told where keeps none, so a test never writes the user's). OK runs `new`, with `template` when one is
+picked: the core reads the file as `open` does and makes it a project of its own, named anew, with a new `uid` and no path, so
+Save asks where and the template is never written. A template whose file is gone is said in the status box and forgotten.
+File > New > Project and Ctrl+N stay the empty project, with no dialog. `BIMCRAFT_NEW_PROJECT_DUMP=<folder> cargo test -p
+bimcraft-ui-egui new_project_screenshots` writes the dialog light and dark.

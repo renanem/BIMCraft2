@@ -9464,6 +9464,13 @@ pub fn mix(mut z: u64) -> u64 {
     z ^ (z >> 31)
 }
 
+impl Model {
+    /// A new identity, for a project begun from another's file (a template): its IFC GlobalIds are then its own.
+    pub fn renew_uid(&mut self) {
+        self.uid = fresh_uid();
+    }
+}
+
 fn fresh_uid() -> u64 {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
     mix(nanos ^ u64::from(std::process::id()).rotate_left(32))
