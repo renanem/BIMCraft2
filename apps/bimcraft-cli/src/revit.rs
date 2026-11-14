@@ -10,6 +10,36 @@ pub fn is_revit(path: &str) -> bool {
     matches!(ext.as_str(), "rvt" | "rfa" | "rte" | "rft")
 }
 
+/// Whether a path names a Revit family (or a family template), which is loaded into a project, never opened as one.
+pub fn is_family(path: &str) -> bool {
+    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    matches!(ext.as_str(), "rfa" | "rft")
+}
+
+#[cfg(not(feature = "rvt"))]
+pub fn load_family(_: &mut Session, path: &str) -> Result<Value, String> {
+    Err(format!("{path}: {WITHOUT}"))
+}
+
+/// Loads a Revit family into the session's project through the `family` command: its types and their parameters, as the
+/// file's PartAtom entry lists them. The reply says what came in and, in `skipped`, what was left out and why.
+#[cfg(feature = "rvt")]
+pub fn load_family(s: &mut Session, path: &str) -> Result<Value, String> {
+    use serde_json::json;
+
+    let read = bimcraft_rvt::family_path(std::path::Path::new(path)).map_err(|e| format!("{path}: {e}"))?;
+    s.execute("family", &read.family).map_err(|e| format!("{path}: {e}"))?;
+    let count = |key: &str| read.family[key].as_object().map(|o| o.len()).or_else(|| read.family[key].as_array().map(Vec::len));
+    Ok(json!({
+        "path": path,
+        "family": read.name,
+        "category": read.family["category"],
+        "types": count("types"),
+        "parameters": count("parameters"),
+        "skipped": read.notes,
+    }))
+}
+
 #[cfg(not(feature = "rvt"))]
 const WITHOUT: &str = "this build of bimcraft-cli was made without Revit support (`--no-default-features`); build with the default `rvt` feature to read Revit files";
 
@@ -156,6 +186,20 @@ pub mod tests {
     use bimcraft_rvt::project_fixture::{
         Block, KIND_MATERIAL, Lev, Mat, Project, Rec, TypeRec, layers_bytes, line_bytes, name_bytes, orientation_bytes,
     };
+
+    #[test]
+    fn a_project_template_imports_supported_elements_and_reports_its_limits() {
+        let path = house("Office.RTE");
+        let mut session = bimcraft_core::engine::Session::new();
+        let result = super::open(&mut session, &path).unwrap();
+        assert!(
+            result["skipped"].as_array().unwrap().iter().any(|note| note.as_str().unwrap().contains("not an entire template conversion"))
+        );
+        assert_eq!(session.model.elements.values().filter(|e| e.category() == "wall").count(), 1);
+        assert!(session.path.is_none());
+        session.model.check().unwrap();
+        std::fs::remove_file(path).unwrap();
+    }
 
     /// A Revit project on disk, in a folder of its own: levels at 0 and 10 ft and one wall 20 ft long, 10 ft tall, of a type with a
     /// brick layer over a concrete one.

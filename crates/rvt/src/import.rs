@@ -226,16 +226,25 @@ pub fn import(bytes: &[u8], name: &str) -> Result<Imported, String> {
 
 /// Reads the Revit project at `path`, from disk (a large file is not held in memory twice).
 pub fn import_path(path: &Path, name: &str) -> Result<Imported, String> {
-    let mut revit = Revit::open(path, Limits::default()).map_err(|e| e.to_string())?;
-    build(&mut revit, name).map(|(i, _)| i)
+    import_path_with_origins(path, name).map(|(i, _)| i)
 }
 
 /// [`import_path`], and what each element made was in the file (`Wall 423099`): for checking an import against another
 /// reader's export of the same file.
 #[doc(hidden)]
 pub fn import_path_with_origins(path: &Path, name: &str) -> Result<(Imported, HashMap<Id, String>), String> {
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or_default();
+    if extension.eq_ignore_ascii_case("rfa") || extension.eq_ignore_ascii_case("rft") {
+        return Err("a Revit family is no project to open: load it into a project as a family (`family_path` reads its types and \
+                    their parameters; tools/revit_bridge exports its geometry from Revit)"
+            .into());
+    }
     let mut revit = Revit::open(path, Limits::default()).map_err(|e| e.to_string())?;
-    build(&mut revit, name)
+    let (mut imported, origins) = build(&mut revit, name)?;
+    if extension.eq_ignore_ascii_case("rte") {
+        imported.skipped.push("Project template: only the project elements supported by the RVT reader were imported. Unused family/type definitions, view templates, filters, sheets, schedules, project/shared parameters and routing preferences are not reconstructed. This is not an entire template conversion; tools/revit_bridge can transfer the editable loaded family library separately.".into());
+    }
+    Ok((imported, origins))
 }
 
 /// The import, and what each element made was in the file.
@@ -427,4 +436,17 @@ fn finish(mut cx: Import, schema: String) -> Result<Imported, String> {
     }
     cx.tell();
     Ok(Imported { model: cx.model, schema, skipped: cx.skipped, moved: None })
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn binary_families_are_never_silently_opened_as_empty_projects() {
+        for file in ["Fixture.rfa", "Fixture.RFA", "Fixture.rft"] {
+            let error = import_path(Path::new(file), "Fixture").err().unwrap();
+            assert!(error.contains("as a family"), "{error}");
+        }
+    }
 }

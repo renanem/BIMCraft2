@@ -15,6 +15,10 @@ the crate is Apache-2.0 only, ported in part from rvt-rs and fenced by [docs/rvt
   each element kind** it imports (`walls`, `floors`, `roofs`, `columns`, `openings`, `rooms`, `pipes`, `ducts`, `framing`, `generic`), joined by `import.rs`. A new kind
   is a module with its own tests, a line in `import.rs`, and its place in the write-up
   [Revit files and the Revit import](../../docs/areas/revit-import.md).
+- **A family file is its types and their parameters** (`family.rs`, from the `PartAtom` entry): the params of the `family`
+  command, checked against `Family::check` as they are built, with notes of what the entry does not hold (geometry, instance
+  parameters, formulas) and of each parameter or type left out or renamed. Data types are told by unit, never by a
+  translated name.
 - Lengths and counts a file claims are bounded before anything is allocated (`Limits`), and the sweep of hostile files is part of
   the tests.
 - References to levels and hosts in the model are GUIDs (`Model::guid`), and what the import puts in the library is given its ids

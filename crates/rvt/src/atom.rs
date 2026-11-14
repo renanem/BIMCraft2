@@ -34,68 +34,16 @@ pub struct Atom {
 
 impl Atom {
     pub fn parse(xml: &[u8]) -> Result<Self> {
-        let bad = |why: &str| Error::Format(format!("the Atom entry {why}"));
-        if xml.len() > MAX_ATOM {
-            return Err(bad(&format!("is {} bytes, over the limit of {MAX_ATOM}", xml.len())));
-        }
-        let xml = std::str::from_utf8(xml).map_err(|_| bad("is not UTF-8"))?;
         let mut atom = Atom::default();
-        let mut stack: Vec<&str> = Vec::new();
-        let mut text = String::new();
-        let mut rest = xml;
-        let mut tags = 0;
-        while let Some(open) = rest.find('<') {
-            text.push_str(&rest[..open]);
-            rest = &rest[open..];
-            let (skip_to, kind) = if rest.starts_with("<!--") {
-                ("-->", None)
-            } else if rest.starts_with("<![CDATA[") {
-                ("]]>", None)
-            } else if rest.starts_with("<?") {
-                ("?>", None)
-            } else if rest.starts_with("<!") {
-                (">", None)
-            } else {
-                (">", Some(()))
-            };
-            let close = rest.find(skip_to).ok_or_else(|| bad("is cut short in the middle of markup"))?;
-            let body = &rest[1..close];
-            rest = &rest[close + skip_to.len()..];
-            if kind.is_none() {
-                continue;
-            }
-            tags += 1;
-            if tags > MAX_TAGS {
-                return Err(bad("has too many tags"));
-            }
-            if let Some(name) = body.strip_prefix('/') {
-                let name = name.trim();
-                if stack.pop() != Some(name) {
-                    return Err(bad(&format!("closes `{name}` where it is not open")));
+        scan(xml, &mut |event| match event {
+            Event::Open { name: "category", tag, .. } => {
+                if let Some(term) = attribute(tag, "term") {
+                    atom.category(&term);
                 }
-                atom.element_ended(&stack, name, &decode(text.trim()));
-                text.clear();
-                continue;
             }
-            let empty = body.ends_with('/');
-            let body = body.trim_end_matches('/');
-            let name = body.split_whitespace().next().unwrap_or("");
-            if name == "category"
-                && let Some(term) = attribute(body, "term")
-            {
-                atom.category(&term);
-            }
-            text.clear();
-            if !empty {
-                if stack.len() >= MAX_DEPTH {
-                    return Err(bad(&format!("nests deeper than {MAX_DEPTH} levels")));
-                }
-                stack.push(name);
-            }
-        }
-        if !stack.is_empty() {
-            return Err(bad("is cut short: an element is never closed"));
-        }
+            Event::Open { .. } => {}
+            Event::Close { name, text, parents } => atom.element_ended(parents, name, text),
+        })?;
         Ok(atom)
     }
 
@@ -129,9 +77,81 @@ impl Atom {
     }
 }
 
-/// `name="value"` inside a tag.
-fn attribute(tag: &str, name: &str) -> Option<String> {
-    let at = tag.find(&format!("{name}="))?;
+/// What [`scan`] meets, in the order the entry holds it.
+pub(crate) enum Event<'a> {
+    /// A start tag (or an empty element, which has no [`Event::Close`]): its name, the whole tag for [`attribute`], and the
+    /// elements it is under.
+    Open { name: &'a str, tag: &'a str, parents: &'a [&'a str], empty: bool },
+    /// An end tag, with the text since the tag before it, trimmed and decoded.
+    Close { name: &'a str, text: &'a str, parents: &'a [&'a str] },
+}
+
+/// Walks an Atom entry's markup within the limits, handing each tag to `visit`: a scanner of its own, no XML library.
+pub(crate) fn scan(xml: &[u8], visit: &mut dyn FnMut(Event<'_>)) -> Result<()> {
+    let bad = |why: &str| Error::Format(format!("the Atom entry {why}"));
+    if xml.len() > MAX_ATOM {
+        return Err(bad(&format!("is {} bytes, over the limit of {MAX_ATOM}", xml.len())));
+    }
+    let xml = std::str::from_utf8(xml).map_err(|_| bad("is not UTF-8"))?;
+    let mut stack: Vec<&str> = Vec::new();
+    let mut text = String::new();
+    let mut rest = xml;
+    let mut tags = 0;
+    while let Some(open) = rest.find('<') {
+        text.push_str(&rest[..open]);
+        rest = &rest[open..];
+        let (skip_to, markup) = if rest.starts_with("<!--") {
+            ("-->", false)
+        } else if rest.starts_with("<![CDATA[") {
+            ("]]>", false)
+        } else if rest.starts_with("<?") {
+            ("?>", false)
+        } else if rest.starts_with("<!") {
+            (">", false)
+        } else {
+            (">", true)
+        };
+        let close = rest.find(skip_to).ok_or_else(|| bad("is cut short in the middle of markup"))?;
+        let body = &rest[1..close];
+        rest = &rest[close + skip_to.len()..];
+        if !markup {
+            continue;
+        }
+        tags += 1;
+        if tags > MAX_TAGS {
+            return Err(bad("has too many tags"));
+        }
+        if let Some(name) = body.strip_prefix('/') {
+            let name = name.trim();
+            if stack.pop() != Some(name) {
+                return Err(bad(&format!("closes `{name}` where it is not open")));
+            }
+            visit(Event::Close { name, text: &decode(text.trim()), parents: &stack });
+            text.clear();
+            continue;
+        }
+        let empty = body.ends_with('/');
+        let body = body.trim_end_matches('/');
+        let name = body.split_whitespace().next().unwrap_or("");
+        visit(Event::Open { name, tag: body, parents: &stack, empty });
+        text.clear();
+        if !empty {
+            if stack.len() >= MAX_DEPTH {
+                return Err(bad(&format!("nests deeper than {MAX_DEPTH} levels")));
+            }
+            stack.push(name);
+        }
+    }
+    if !stack.is_empty() {
+        return Err(bad("is cut short: an element is never closed"));
+    }
+    Ok(())
+}
+
+/// `name="value"` inside a tag: the attribute of that name, not one whose name ends in it.
+pub(crate) fn attribute(tag: &str, name: &str) -> Option<String> {
+    let key = format!("{name}=");
+    let at = tag.match_indices(&key).map(|(at, _)| at).find(|&at| tag[..at].ends_with(char::is_whitespace))?;
     let rest = &tag[at + name.len() + 1..];
     let quote = rest.chars().next().filter(|c| matches!(c, '"' | '\''))?;
     let end = rest[1..].find(quote)?;

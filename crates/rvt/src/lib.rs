@@ -13,6 +13,7 @@ pub mod data;
 mod ducts;
 pub mod elem_table;
 mod error;
+mod family;
 #[cfg(any(test, feature = "testing"))]
 pub mod fixture;
 mod floors;
@@ -39,6 +40,7 @@ mod walls;
 
 pub use container::{BASIC_FILE_INFO, Limits, Revit};
 pub use error::{Error, Result};
+pub use family::{FamilyFile, family, family_path};
 pub use import::{import, import_path, import_path_with_origins};
 
 #[cfg(test)]

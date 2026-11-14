@@ -31,14 +31,14 @@ pub fn open_extensions(revit: bool) -> Vec<&'static str> {
     let mut extensions = bimcraft_core::files::PROJECTS.to_vec();
     extensions.push("ifc");
     if revit {
-        extensions.push("rvt");
+        extensions.extend(["rvt", "rte"]);
     }
     extensions
 }
 
-/// Whether `path` names a Revit project. Families (`.rfa`) and templates are not read here.
+/// Whether `path` names a Revit project or project template. Binary families use the family bridge.
 pub fn is_revit(path: &Path) -> bool {
-    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("rvt"))
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("rvt") || e.eq_ignore_ascii_case("rte"))
 }
 
 /// An import under way: the file it reads, and where its answer comes from.

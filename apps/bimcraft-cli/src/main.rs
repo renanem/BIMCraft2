@@ -17,7 +17,8 @@ use serde_json::{Value, json};
 const USAGE: &str = "USAGE:
   bimcraft-cli run [FILE] [--sample | --highrise] [--cmd 'ID {json}']… [--script FILE]… [--save PATH]…
       Open FILE (a .bimc project or an earlier .bimcraft, or an .ifc or Revit .rvt file to import) or start empty, then in order: build the sample house, run
-      commands and scripts (one `ID {json}` per line), save. --save writes by extension:
+      commands and scripts (one `ID {json}` per line), save. A Revit family (.rfa) named among them is loaded into the project
+      as a family, its types and their parameters, and says what the file did not give. --save writes by extension:
       .bimc (the project; .bimt the same), .ifc (IFC4), .glb (the 3D view's scene as glTF), .svg or .png (the lowest level's plan).
       Scripts may name a line `@name = ID {json}`; later values use `@name`, `$last`, `$-2` or a field such as `@walls.ids.0`.
       --highrise builds an original 20-storey performance sample (about 10,000 elements).
@@ -90,6 +91,7 @@ fn cli(args: &[String], out: &mut impl Write) -> Result<(), String> {
                     }
                     "--save" => vec![s.execute("save", &json!({ "path": value()? }))?],
                     flag if flag.starts_with("--") => return Err(format!("unknown option `{flag}`\n\n{USAGE}")),
+                    file if revit::is_family(file) => vec![revit::load_family(&mut s, file)?],
                     file if revit::is_revit(file) => vec![revit::open(&mut s, file)?],
                     file => vec![s.execute("open", &json!({ "path": file }))?],
                 };
@@ -108,6 +110,10 @@ fn cli(args: &[String], out: &mut impl Write) -> Result<(), String> {
             s.execute("open", &json!({ "path": file }))?;
             print_pretty(out, &s.execute("inspect", &json!({}))?)
         }
+        [cmd, from, _] if cmd == "convert" && revit::is_family(from) => Err(format!(
+            "{from} is a family, not a project, so there is nothing to convert: `bimcraft-cli run PROJECT {from} --save PROJECT` loads it \
+             into a project"
+        )),
         [cmd, from, to] if cmd == "convert" => {
             if revit::is_revit(from) {
                 revit::open(&mut s, from)?;
@@ -488,6 +494,36 @@ modify {"id":"$last","mark":"Entry"}"#,
         assert_eq!(info["revit"]["release"], 2024);
         assert!(info["elements"]["error"].as_str().unwrap().contains("Formats/Latest"), "{info}");
         assert!(cli_out(&["info", "/no/such/file.rvt"]).unwrap_err().contains("/no/such/file.rvt"));
+    }
+
+    #[cfg(feature = "rvt")]
+    #[test]
+    fn a_revit_family_named_on_the_command_line_is_loaded_into_the_project_with_its_types_and_parameters() {
+        use bimcraft_rvt::fixture::{Basic, basic_file_info, container};
+        // A PartAtom entry written here, in the layout Revit's own show: a part for each type, an element for each parameter.
+        let atom = br#"<?xml version="1.0" encoding="UTF-8"?><entry xmlns="http://www.w3.org/2005/Atom" xmlns:A="urn:schemas-autodesk-com:partatom"><title>0</title><category><term>Furniture</term><scheme>adsk:revit:grouping</scheme></category><A:family type="user"><A:part type="user"><title>Low</title><Seat_Height displayName="Seat Height" type="custom" typeOfParameter="Length" units="mm">450</Seat_Height></A:part><A:part type="user"><title>Bar</title><Seat_Height displayName="Seat Height" type="custom" typeOfParameter="Length" units="in">30</Seat_Height></A:part></A:family></entry>"#;
+        let family = revit_file("Stool.rfa", &container(&[("BasicFileInfo", &basic_file_info(&Basic::default())), ("PartAtom", atom)]));
+        let saved = std::path::Path::new(&family).with_file_name("with-stool.bimc").to_string_lossy().into_owned();
+        // It joins the project the session has: the sample's walls are still there.
+        let out = cli_out(&["run", "--sample", &family, "--save", &saved]).unwrap();
+        let reply: Value = serde_json::from_str(out.lines().find(|l| l.contains("\"family\"")).unwrap()).unwrap();
+        assert_eq!((reply["family"].as_str(), reply["category"].as_str()), (Some("Stool"), Some("furniture")));
+        assert_eq!((reply["types"].as_u64(), reply["parameters"].as_u64()), (Some(2), Some(1)));
+        let notes: Vec<&str> = reply["skipped"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(notes[0].starts_with("2 types and 1 parameter read"), "{notes:?}");
+        assert!(notes.iter().any(|n| n.contains("geometry") && n.contains("tools/revit_bridge")), "{notes:?}");
+        let mut s = Session::new();
+        s.execute("open", &json!({"path": saved})).unwrap();
+        let stool = &s.model.families["Stool"];
+        assert_eq!(stool.types["Bar"]["Seat Height"], 762.0);
+        assert_eq!(stool.types["Low"]["Seat Height"], 450.0);
+        assert!(s.model.elements.values().any(|e| e.category() == "wall"), "the project it joined is kept");
+        // A family is no project: converting one says so, and a file that is no family says what it lacks.
+        let e = cli_out(&["convert", &family, &saved.replace(".bimc", ".ifc")]).unwrap_err();
+        assert!(e.contains("is a family") && e.contains("run"), "{e}");
+        let bare = revit_file("Bare.rfa", &container(&[("BasicFileInfo", &basic_file_info(&Basic::default()))]));
+        let e = cli_out(&["run", &bare]).unwrap_err();
+        assert!(e.contains("Bare.rfa") && e.contains("PartAtom"), "{e}");
     }
 
     #[cfg(not(feature = "rvt"))]

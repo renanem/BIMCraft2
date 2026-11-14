@@ -13,6 +13,21 @@ use super::*;
 use crate::revit::{Importer, open_extensions};
 use crate::{OsEvent, Status};
 
+#[test]
+fn project_templates_use_the_revit_reader_and_open_as_unsaved_projects() {
+    assert!(open_extensions(true).contains(&"rte"));
+    assert!(!open_extensions(false).contains(&"rte"));
+    assert!(crate::revit::is_revit(Path::new("Office.RTE")));
+    // Binary families need the family bridge, not a project import that discards their definition.
+    assert!(!crate::revit::is_revit(Path::new("Outlet.rfa")));
+    let mut r = rig(|| Ok(survey(&[])));
+    r.open("/projects/Office.RTE");
+    r.done();
+    assert_eq!(r.project(), "Survey");
+    assert!(r.h.state().session.path.is_none());
+    assert_eq!(*r.asked.lock().unwrap(), [PathBuf::from("/projects/Office.RTE")]);
+}
+
 /// What a Revit import brings: a project named Survey with one wall, and `notes` for what it left out.
 fn survey(notes: &[&str]) -> Imported {
     let mut s = Session::new();

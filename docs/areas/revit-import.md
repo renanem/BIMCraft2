@@ -81,3 +81,29 @@ Moved from the root `CLAUDE.md`, word for word: the root keeps the rules and the
   one at a time (issue 45). A file named on the
   command line is `BimApp::open_later`: the window comes up first. Tests give the window a closure for a reader and block it at a gate
   (`tests/revit.rs`, with `step`, never `run`).
+
+## Revit families
+
+A family file (`.rfa`) is read by `crates/rvt/src/family.rs` (`family_path`, `Revit::family`) from its `PartAtom` entry, the Atom
+document every family file holds and Revit's public API writes (`Application.ExtractPartAtomFromFamilyFile`). What comes back
+(`FamilyFile`) is the params of the `family` command and the notes: the family's category (Revit's English name of it where
+BIMCraft has that category, else generic and said; a door or a window without length parameters `Width` and `Height` is
+generic too, with the rule), its options (work plane-based, always vertical, shared, cut with voids, Default Elevation, which
+is the family's here), its types, and each type's parameters: name, kind, value in the model's units and a shared one's GUID.
+Revit names a data type in the language it saved the file in, so only the English names are told by name; any other is told by
+its unit (a unit of length makes a length), a yes or no by its data type being its two answers, and what is left is a number in
+the file's unit (said, with the unit) or text. A length may carry its unit or be feet and fractional inches. A name the
+family's rules refuse is rewritten with `_` and said; a parameter or type they still refuse (`Family::check` runs on each
+parameter as it is added) is left out by name with the rule, as are those past `MAX_PARAMETERS` and `MAX_TYPES`. The entry
+holds types' values only: geometry, reference planes, dimensions, instance parameters, formulas, connectors, materials, nested
+families and plan symbols are not read, the last note says so, and the bridge through Revit's API
+([tools/revit_bridge](../../tools/revit_bridge/README.md)) is where they come from. On the command line a `.rfa` named to `run`
+is loaded into the session's project (`revit::load_family`: `bimcraft-cli run project.bimc chair.rfa --save project.bimc`),
+its reply listing the notes in `skipped`; `convert` refuses one, since a family is no project. To look at one: load it, read it
+back with `family {"name": …}`, place it with `component` and list it with `elements`. `BIMCRAFT_RFA_SAMPLES=<folders> cargo
+test -p bimcraft-rvt family:: -- --nocapture` reads every `.rfa` under the folders (a Revit installation's library, read in
+place), loads each through the `family` command and tallies the notes.
+
+## Revit family library exchange and project templates (fork)
+
+The desktop also offers `.rte` project templates through the existing project importer. These open as unsaved projects, with an explicit report note: unused definitions and template settings are not reconstructed. A binary `.rfa`/`.rft` file is not opened as a project: its types and parameters load as a family (above), and its geometry comes through the public-API [family library bridge](../../tools/revit_bridge/README.md). It exports per-type mesh snapshots and a self-contained native command script, not parametric constraints or an entire template. No Autodesk assets are bundled. The API exporter still needs validation in Revit; converter tests use synthetic geometry.
