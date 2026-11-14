@@ -237,14 +237,14 @@ def family_name(document):
     return title[:-4] if title.lower().endswith(".rfa") else title
 
 
-def read_family(document):
+def read_family(document, name=None):
     owner = document.OwnerFamily
     manager = document.FamilyManager
     types = list(manager.Types)
     if len(types) > bridge.MAX_TYPES:
         raise ValueError("more than %s family types" % bridge.MAX_TYPES)
     listed = parameters(manager)
-    snapshot = {"name": family_name(document), "category": category(owner), "options": options(owner),
+    snapshot = {"name": name or family_name(document), "category": category(owner), "options": options(owner),
                 "parameters": [item for _, item in listed], "types": [], "notes": []}
 
     def values(family_type):
@@ -277,6 +277,43 @@ def read_family(document):
     return snapshot
 
 
+def read_document(document, limit=None, progress=None):
+    """What the bridge exports of a document: the family it is, or a project's levels and its loaded editable families
+    (the first `limit` of them, when given), each opened with EditFamily and closed unsaved. `progress(text)` hears of each."""
+    snapshot = {"title": text(document.Title), "families": [], "levels": [], "notes": []}
+    if document.IsFamilyDocument:
+        snapshot["families"].append(read_family(document))
+        return snapshot
+    snapshot["levels"] = [{"name": text(level.Name), "elevation": level.ProjectElevation * 304.8}
+                          for level in DB.FilteredElementCollector(document).OfClass(DB.Level)]
+    families = list(DB.FilteredElementCollector(document).OfClass(DB.Family))
+    for family in families:
+        if not family.IsEditable or family.IsInPlace:
+            snapshot["notes"].append("Family %s (%s) is not editable or is in-place; not exported" % (family.Name, element_id(family)))
+            continue
+        if limit is not None and len(snapshot["families"]) >= limit:
+            snapshot["notes"].append("Only the first %s editable families of %s were exported" % (limit, len(families)))
+            break
+        opened = None
+        try:
+            opened = document.EditFamily(family)
+            # The project knows the family by its name; its own document may hold none.
+            exported = read_family(opened, text(family.Name))
+            snapshot["families"].append(exported)
+            if progress is not None:
+                progress("%s: %s parameters, %s types" % (exported["name"], len(exported["parameters"]), len(exported["types"])))
+        except RuntimeError:
+            raise
+        except Exception as error:
+            snapshot["notes"].append("Family %s (%s) not exported: %s" % (family.Name, element_id(family), error))
+            if progress is not None:
+                progress("%s not exported: %s" % (family.Name, error))
+        finally:
+            if opened is not None:
+                opened.Close(False)
+    return snapshot
+
+
 def export_active():
     document = revit.doc
     if document is None:
@@ -287,28 +324,7 @@ def export_active():
     destination = os.path.join(parent, "BIMCraft-exchange")
     if os.path.exists(destination):
         forms.alert("BIMCraft-exchange already exists. Select another parent folder; exports are never overwritten.", exitscript=True)
-    snapshot = {"title": text(document.Title), "families": [], "levels": [], "notes": []}
-    if document.IsFamilyDocument:
-        snapshot["families"].append(read_family(document))
-    else:
-        snapshot["levels"] = [{"name": text(level.Name), "elevation": level.ProjectElevation * 304.8}
-                              for level in DB.FilteredElementCollector(document).OfClass(DB.Level)]
-        for family in DB.FilteredElementCollector(document).OfClass(DB.Family):
-            if not family.IsEditable or family.IsInPlace:
-                snapshot["notes"].append("Family %s (%s) is not editable or is in-place; not exported" % (family.Name, element_id(family)))
-                continue
-            opened = None
-            try:
-                opened = document.EditFamily(family)
-                snapshot["families"].append(read_family(opened))
-            except RuntimeError:
-                raise
-            except Exception as error:
-                snapshot["notes"].append("Family %s (%s) not exported: %s" % (family.Name, element_id(family), error))
-            finally:
-                if opened is not None:
-                    opened.Close(False)
-    report = bridge.write_bundle(snapshot, destination)
+    report = bridge.write_bundle(read_document(document), destination)
     forms.alert("Exported %s families; %s failures. Read report.json.\n%s" %
                 (len(report["exported"]), len(report["failed"]), destination))
 
