@@ -132,8 +132,15 @@ geometry out and the parameters in, with the reason. A newer `version` is refuse
 passed over. The same `FamilyFile` comes back, so the command line (`.rfa.json` named to `run`) and Insert > Revit Family
 (whose dialog offers `.rfa` and `.json`) load it as they load a `.rfa`. The bridge's own tests are Python
 (`python -m unittest discover -s tools/revit_bridge -p test_bridge.py`; with `BIMCRAFT_CLI` set to a built `bimcraft-cli`, one
-of them writes an export, loads it, places both types and reads the family back). The button itself has not been run inside
-Revit: its API calls were checked against the Revit 2027 API reference only.
+of them writes an export, loads it, places both types and reads the family back). The script's family reader (`read_family`)
+was run inside Revit 2027 on 2026-11-14 (`pyrevit run`, IronPython 2.7.12 on .NET 10) on two families of the library Revit
+installs, opened in place and closed unsaved, and what it wrote was loaded here: each type's mesh has the box its length
+parameter says, and its four formulas work out. That run is why the script names a family by its document's title where
+`OwnerFamily.Name` is empty, tells a kind by the unit a parameter is measured in (`UnitUtils.IsValidUnit` against length,
+area, volume and angle: Revit has many data types measured as a length is), reads joined forms (`GeomCombination`) and
+leaves out the template's host solid, the one form `DocumentValidation.CanDeleteElement` refuses. Not run inside Revit: the
+button's own dialogs, and the export from a project (`EditFamily` of each loaded family). A nested void family that cuts
+only when loaded into a project comes out as a solid inside an uncut host.
 
 ## Revit family library exchange and project templates (fork)
 

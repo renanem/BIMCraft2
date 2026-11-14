@@ -60,8 +60,18 @@ def kind(parameter):
                         (S.Reference.Material, "material")]:
         if same(spec, known):
             return name
-    if parameter.StorageType == DB.StorageType.String:
+    if parameter.StorageType in (DB.StorageType.String, DB.StorageType.ElementId):
+        # Words, or what names something of the document (an image, a nested family's type): its name, as text.
         return "text"
+    # Revit has many data types measured as a length is (a bar's diameter, a section's dimension, a pipe's size): what a
+    # parameter is here is told by the unit it is measured in, as BIMCraft has one kind for each.
+    try:
+        own = parameter.GetUnitTypeId()
+        for known, name in [(S.Length, "length"), (S.Area, "area"), (S.Volume, "volume"), (S.Angle, "angle")]:
+            if DB.UnitUtils.IsValidUnit(known, own):
+                return name
+    except Exception:
+        pass
     return "other"
 
 
@@ -86,6 +96,11 @@ def group(parameter):
 FACTORS = {"length": 304.8, "area": 304.8 ** 2, "volume": 304.8 ** 3, "angle": 57.29577951308232}
 
 
+def tidy(number):
+    """A converted number without the last bits a multiplication by 304.8 leaves: 240, not 239.99999999999997."""
+    return round(number, 9)
+
+
 def unit(parameter):
     """The label of the unit an `other` parameter is shown in, or None."""
     try:
@@ -105,10 +120,10 @@ def value(document, family_type, parameter, name):
             if number is None:
                 return None
             if name in FACTORS:
-                return number * FACTORS[name]
+                return tidy(number * FACTORS[name])
             if name == "other":
                 try:
-                    return DB.UnitUtils.ConvertFromInternalUnits(number, parameter.GetUnitTypeId())
+                    return tidy(DB.UnitUtils.ConvertFromInternalUnits(number, parameter.GetUnitTypeId()))
                 except Exception:
                     return number
             return number
@@ -187,18 +202,39 @@ def append_mesh(mesh, output):
         output.append(vertices)
 
 
+def is_host(document, item):
+    """Whether an element is the template's own host: the solid a face-based or hosted family is drawn on, which is no part
+    of the family and the only form Revit does not let the user delete."""
+    try:
+        return not DB.DocumentValidation.CanDeleteElement(document, item.Id)
+    except Exception:
+        return False
+
+
 def family_geometry(document):
+    """The triangles of what the family shows: its solid forms, its joined forms and its nested instances, never its host."""
     options = DB.Options()
     options.DetailLevel = DB.ViewDetailLevel.Fine
     options.IncludeNonVisibleObjects = False
     output = []
     for item in DB.FilteredElementCollector(document).WhereElementIsNotElementType():
         if isinstance(item, DB.GenericForm):
-            if item.IsSolid:
+            # A form joined to others has no geometry of its own: its combination holds it.
+            if item.IsSolid and not is_host(document, item):
                 triangles(item.get_Geometry(options), output)
-        elif isinstance(item, DB.FamilyInstance):
-            triangles(item.get_Geometry(options), output)
+        elif isinstance(item, (DB.GeomCombination, DB.FamilyInstance)):
+            if not is_host(document, item):
+                triangles(item.get_Geometry(options), output)
     return output
+
+
+def family_name(document):
+    """The family's name: a family document opened from its file gives its owner family none, so its title names it."""
+    name = text(document.OwnerFamily.Name or "").strip()
+    if name:
+        return name
+    title = text(document.Title or "").strip()
+    return title[:-4] if title.lower().endswith(".rfa") else title
 
 
 def read_family(document):
@@ -208,7 +244,7 @@ def read_family(document):
     if len(types) > bridge.MAX_TYPES:
         raise ValueError("more than %s family types" % bridge.MAX_TYPES)
     listed = parameters(manager)
-    snapshot = {"name": text(owner.Name), "category": category(owner), "options": options(owner),
+    snapshot = {"name": family_name(document), "category": category(owner), "options": options(owner),
                 "parameters": [item for _, item in listed], "types": [], "notes": []}
 
     def values(family_type):
