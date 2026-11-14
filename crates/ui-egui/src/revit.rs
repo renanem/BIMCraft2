@@ -31,14 +31,22 @@ pub fn open_extensions(revit: bool) -> Vec<&'static str> {
     let mut extensions = bimcraft_core::files::PROJECTS.to_vec();
     extensions.push("ifc");
     if revit {
-        extensions.extend(["rvt", "rte"]);
+        // A Revit project or template, and what tools/revit_bridge exported of one (`.rte.json`).
+        extensions.extend(["rvt", "rte", "json"]);
     }
     extensions
 }
 
-/// Whether `path` names a Revit project or project template. Binary families use the family bridge.
+/// Whether `path` names a Revit project or project template, or a template the bridge exported from Revit (`.rte.json`):
+/// each is read by the reader the desktop app attaches and opens as a new unsaved project. Families go through Insert.
 pub fn is_revit(path: &Path) -> bool {
-    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("rvt") || e.eq_ignore_ascii_case("rte"))
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("rvt") || e.eq_ignore_ascii_case("rte")) || is_template_export(path)
+}
+
+/// Whether `path` names a template (or a project) exported from Revit by tools/revit_bridge.
+pub fn is_template_export(path: &Path) -> bool {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    name.ends_with(".rte.json") || name.ends_with(".rvt.json")
 }
 
 /// An import under way: the file it reads, and where its answer comes from.

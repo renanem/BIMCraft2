@@ -20,6 +20,10 @@ fn project_templates_use_the_revit_reader_and_open_as_unsaved_projects() {
     assert!(crate::revit::is_revit(Path::new("Office.RTE")));
     // Binary families need the family bridge, not a project import that discards their definition.
     assert!(!crate::revit::is_revit(Path::new("Outlet.rfa")));
+    // What the bridge exported of a template opens the same way; any other JSON is not Revit's.
+    assert!(open_extensions(true).contains(&"json") && !open_extensions(false).contains(&"json"));
+    assert!(crate::revit::is_revit(Path::new("/exports/Office.RTE.json")));
+    assert!(!crate::revit::is_revit(Path::new("chair.json")) && !crate::revit::is_revit(Path::new("0000_Desk.rfa.json")));
     let mut r = rig(|| Ok(survey(&[])));
     r.open("/projects/Office.RTE");
     r.done();

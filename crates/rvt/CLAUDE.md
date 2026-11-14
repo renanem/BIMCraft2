@@ -23,6 +23,9 @@ the crate is Apache-2.0 only, ported in part from rvt-rs and fenced by [docs/rvt
   by `tools/revit_bridge`, read as hostile and built the same way, formulas tried one at a time and a mesh for each type.
   A change to what the bridge writes changes `exchange.rs`, its `VERSION` when an older reader would misread it, and the
   layout at the top of the module.
+- **A template from the bridge is made by commands** (`template.rs`): each entry of the export runs its command on a
+  new `Session`, and what a command refuses is a note. A new kind of setting is a list in the export, a command here, a
+  count in the first note and a line less in the last.
 - Lengths and counts a file claims are bounded before anything is allocated (`Limits`), and the sweep of hostile files is part of
   the tests.
 - References to levels and hosts in the model are GUIDs (`Model::guid`), and what the import puts in the library is given its ids

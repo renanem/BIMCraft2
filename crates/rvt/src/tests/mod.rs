@@ -154,6 +154,7 @@ mod roofs;
 mod rooms;
 mod rvt_rs;
 mod sketch;
+mod template;
 mod walls;
 
 // ---------- the container ----------

@@ -36,6 +36,7 @@ mod roofs;
 mod rooms;
 pub mod schema;
 mod sketch;
+mod template;
 pub mod types;
 mod walls;
 
@@ -44,6 +45,7 @@ pub use error::{Error, Result};
 pub use exchange::{exchange_family, exchange_family_path};
 pub use family::{FamilyFile, family, family_path};
 pub use import::{import, import_path, import_path_with_origins};
+pub use template::exchange_template_path;
 
 #[cfg(test)]
 mod tests;

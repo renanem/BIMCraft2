@@ -2,7 +2,9 @@
 
 This module has no dependency on Revit: script.py asks the API and hands a snapshot here. Each family becomes one
 `NNNN_name.rfa.json` file, format `bimcraft-revit-family` version 1, which BIMCraft reads (Insert > Revit Family, or
-`bimcraft-cli run project.bimc NNNN_name.rfa.json --save project.bimc`). BIMCraft, not this module, decides what a family
+`bimcraft-cli run project.bimc NNNN_name.rfa.json --save project.bimc`). A project or a template also becomes one
+`NAME.rte.json`, format `bimcraft-revit-template` version 1: its levels, phases, line and fill patterns and text types,
+and the names of its families' files, which BIMCraft opens as a new project to save as a `.bimt`. BIMCraft, not this module, decides what a family
 there may hold: a parameter, a formula or a mesh its rules refuse is left out there, by name, in its import report.
 
 Lengths are millimetres, areas mm2, volumes mm3, angles degrees. Run: python bridge.py snapshot.json NEW_OUTPUT_FOLDER
@@ -18,6 +20,8 @@ import sys
 
 FORMAT = "bimcraft-revit-family"
 VERSION = 1
+TEMPLATE_FORMAT = "bimcraft-revit-template"
+TEMPLATE_VERSION = 1
 MAX_TRIANGLES = 100000
 MAX_TYPES = 1000
 MAX_PARAMETERS = 2000
@@ -136,6 +140,43 @@ def export_family(source):
     return result
 
 
+def listed(snapshot, key):
+    """A snapshot's list of that name, or none: what is no list is passed over."""
+    value = snapshot.get(key, [])
+    return value if isinstance(value, list) else []
+
+
+def export_template(snapshot, families):
+    """A project's or a template's own settings as the template file's object, naming the family files beside it.
+
+    BIMCraft runs a command for each entry and leaves out what the command refuses, so entries are passed on as the API
+    gave them: only what no file should hold (a number that is none, a name that is none) is dropped here, with a note.
+    """
+    notes = [note for note in listed(snapshot, "notes") if isinstance(note, STRING_TYPES)]
+    result = {"format": TEMPLATE_FORMAT, "version": TEMPLATE_VERSION, "name": name(snapshot.get("title", "Revit template")),
+              "levels": [], "phases": [], "line_patterns": [], "fill_patterns": [], "text_types": [],
+              "families": list(families), "notes": notes}
+    for level in listed(snapshot, "levels"):
+        try:
+            result["levels"].append({"name": name(level["name"]), "elevation": number(level["elevation"])})
+        except (ValueError, KeyError, TypeError) as error:
+            notes.append("A level was not exported: %s" % error)
+    for phase in listed(snapshot, "phases"):
+        if isinstance(phase, STRING_TYPES) and phase.strip():
+            result["phases"].append(phase.strip())
+    for key in ("line_patterns", "fill_patterns", "text_types"):
+        for entry in listed(snapshot, key):
+            try:
+                entry = dict(entry)
+                entry["name"] = name(entry["name"])
+                # allow_nan=False refuses what JSON cannot hold, before anything is written.
+                json.dumps(entry, allow_nan=False)
+                result[key].append(entry)
+            except (ValueError, KeyError, TypeError) as error:
+                notes.append("An entry of %s was not exported: %s" % (key, error))
+    return result
+
+
 def encode(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
@@ -146,7 +187,8 @@ def write_text(path, text):
 
 
 def write_bundle(snapshot, destination):
-    """Never overwrite a previous export: `families/NNNN_name.rfa.json`, `project.txt` (the levels) and `report.json`."""
+    """Never overwrite a previous export: `families/NNNN_name.rfa.json`, `NAME.rte.json` (the project's or template's own
+    settings, naming those families: what BIMCraft opens as a new project) and `report.json`."""
     destination = str(destination)
     os.makedirs(os.path.join(destination, "families"))
     report = {"exported": [], "failed": [], "files": [], "notes": snapshot.get("notes", []),
@@ -169,17 +211,11 @@ def write_bundle(snapshot, destination):
         except (ValueError, KeyError, TypeError, AttributeError) as error:
             failed = source.get("name", "?") if isinstance(source, dict) else "?"
             report["failed"].append({"family": failed, "reason": str(error)})
-    # Apply to a fresh project only: this script changes its two starter levels by their documented IDs.
-    project = ["new " + encode({"name": name(snapshot.get("title", "Revit library"))})]
-    levels = sorted(snapshot.get("levels", []), key=lambda item: number(item["elevation"]))
-    for index, level in enumerate(levels):
-        values = {"name": name(level["name"]), "elevation": number(level["elevation"])}
-        if index < 2:
-            values["id"] = 100000 + index
-            project.append("modify " + encode(values))
-        else:
-            project.append("level " + encode(values))
-    write_text(os.path.join(destination, "project.txt"), "\n".join(project) + "\n")
+    template = export_template(snapshot, report["files"])
+    safe = re.sub(r'[^\w.-]', "_", template["name"], flags=re.UNICODE)[:80]
+    report["template"] = safe + ".rte.json"
+    report["notes"] = template["notes"]
+    write_text(os.path.join(destination, report["template"]), encode(template) + "\n")
     write_text(os.path.join(destination, "report.json"),
                json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n")
     return report

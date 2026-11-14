@@ -142,6 +142,25 @@ leaves out the template's host solid, the one form `DocumentValidation.CanDelete
 button's own dialogs, and the export from a project (`EditFamily` of each loaded family). A nested void family that cuts
 only when loaded into a project comes out as a solid inside an uncut host.
 
+## Revit templates through the bridge
+
+From a project or a template open in Revit, the bridge also writes `NAME.rte.json` (`bimcraft-revit-template`, version 1,
+laid out at the top of `crates/rvt/src/template.rs`): the levels, the phases in order, the line patterns (dashes, spaces and
+dots, mm on paper), the fill patterns (drafting or model, each family of lines with its angle, spacing, origin, shift and
+dashes, a space a negative length) and the text types (font, size on paper, bold, italic, underline, width factor, colour,
+border), and the paths of the family files beside it. `exchange_template_path` makes of it a new project the way a user
+would, one command for each entry on a `Session` (`level`, `phase`, `line_pattern`, `fill_pattern`, `text_type`, `family`), so
+the commands' own rules decide: what one refuses is left out by name with its reason (`N line patterns left out, why:
+names`, which the desktop counts) and the rest comes in. The template's levels and phases take the place of the two of each a
+project starts with: the starters are named out of the way, the template's are added, and the starters are deleted once one
+came in (a phase's elements go `into` the first); with none, they keep their names. A family's path must stay under the
+export's own folder (every component a plain name), else it is left out unread. What comes back is the `Imported` a Revit
+file's import gives, so the desktop opens it through the same hook (File > Open offers `.json` with a reader; `is_revit` takes
+`.rte.json` and `.rvt.json`) as an unsaved project with its report, to be saved as a `.bimt`, which New Project then offers;
+on the command line, `bimcraft-cli run Office.rte.json --save Office.bimt`. The last note lists what the bridge does not
+export yet: view templates, filters, object styles, line styles and weights, dimension types, project and shared
+parameters, sheets and title blocks. The script's readers of these settings have not been run inside Revit.
+
 ## Revit family library exchange and project templates (fork)
 
 The desktop also offers `.rte` project templates through the existing project importer. These open as unsaved projects, with an explicit report note: unused definitions and template settings are not reconstructed. A binary `.rfa`/`.rft` file is not opened as a project: its types and parameters load as a family (above), and its geometry comes through the public-API [family library bridge](../../tools/revit_bridge/README.md). It exports each family's parameters and per-type mesh snapshots, not parametric constraints or an entire template. No Autodesk assets are bundled. The API exporter still needs validation in Revit; converter tests use synthetic geometry.

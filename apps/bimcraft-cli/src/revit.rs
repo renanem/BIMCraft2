@@ -4,10 +4,17 @@
 use bimcraft_core::engine::Session;
 use serde_json::Value;
 
-/// Whether a path names a Revit file: a project, a family, a template or a family template.
+/// Whether a path names a Revit file (a project, a family, a template or a family template), or a template the bridge
+/// exported from Revit (`.rte.json`), which opens as a project does.
 pub fn is_revit(path: &str) -> bool {
     let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    matches!(ext.as_str(), "rvt" | "rfa" | "rte" | "rft")
+    matches!(ext.as_str(), "rvt" | "rfa" | "rte" | "rft") || is_template_export(path)
+}
+
+/// Whether a path names a template (or a project) exported from Revit by tools/revit_bridge.
+pub fn is_template_export(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".rte.json") || lower.ends_with(".rvt.json")
 }
 
 /// Whether a path names a Revit family (or a family template), or one the bridge exported from Revit (`.rfa.json`): either is
@@ -76,7 +83,13 @@ pub fn open(s: &mut Session, path: &str) -> Result<Value, String> {
     use std::collections::BTreeMap;
 
     let stem = std::path::Path::new(path).file_stem().map_or_else(|| "Project".into(), |s| s.to_string_lossy().into_owned());
-    let i = bimcraft_rvt::import_path(std::path::Path::new(path), &stem).map_err(|e| format!("{path}: {e}"))?;
+    // What the bridge exported of a template is JSON of BIMCraft's own; a Revit file is read by the reader.
+    let i = if is_template_export(path) {
+        bimcraft_rvt::exchange_template_path(std::path::Path::new(path))
+    } else {
+        bimcraft_rvt::import_path(std::path::Path::new(path), &stem)
+    };
+    let i = i.map_err(|e| format!("{path}: {e}"))?;
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for e in i.model.elements.values() {
         *counts.entry(e.category()).or_default() += 1;

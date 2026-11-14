@@ -27,6 +27,17 @@ def family():
             ]}
 
 
+def office():
+    return {"title": "Office", "families": [family()],
+            "levels": [{"name": "Ground", "elevation": 0}, {"name": "Roof", "elevation": 4000}],
+            "phases": ["Survey", "Fit Out"],
+            "line_patterns": [{"name": "Office Chain", "segments": [{"dash": 12.0}, {"space": 2.0}, "dot", {"space": 2.0}]}],
+            "fill_patterns": [{"name": "Office Tile", "target": "model", "solid": False,
+                               "lines": [{"angle": 90.0, "spacing": 600.0, "origin": [0.0, 0.0], "shift": 0.0, "dashes": [300.0, -300.0]}]}],
+            "text_types": [{"name": "Office 2mm", "font": "Arial", "size": 2.0, "bold": True, "color": [200, 30, 30]}],
+            "notes": ["A nested family could not be read"]}
+
+
 class BridgeTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("BIMCRAFT_CLI"), "set BIMCRAFT_CLI to test the native consumer")
     def test_native_cli_loads_places_and_reopens_both_types(self):
@@ -35,8 +46,7 @@ class BridgeTests(unittest.TestCase):
             report = bridge.write_bundle({"title": "Synthetic", "families": [family()]}, root / "exchange")
             exported = root / "exchange" / report["files"][0]
             native = root / "converted.bimc"
-            result = subprocess.run([os.environ["BIMCRAFT_CLI"], "run", "--script", str(root / "exchange" / "project.txt"),
-                                     str(exported),
+            result = subprocess.run([os.environ["BIMCRAFT_CLI"], "run", str(exported),
                                      "--cmd", 'component {"family":"Socket","type":"Small","at":[1000,1000]}',
                                      "--cmd", 'component {"family":"Socket","type":"Large","at":[2000,1000]}',
                                      "--save", str(native)], capture_output=True, text=True, encoding="utf-8", check=True)
@@ -101,10 +111,53 @@ class BridgeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             bridge.export_family(source)
 
-    def test_bundle_holds_a_file_for_each_family_the_levels_and_a_report_of_loss_and_failures(self):
-        snapshot = {"title": "Office", "families": [family(), {"name": "Broken"}, "odd"],
-                    "levels": [{"name": "Ground", "elevation": 0}, {"name": "Roof", "elevation": 4000}],
-                    "notes": ["A nested family could not be read"]}
+    @unittest.skipUnless(os.environ.get("BIMCRAFT_CLI"), "set BIMCRAFT_CLI to test the native consumer")
+    def test_native_cli_opens_the_template_as_a_project_and_saves_it_as_a_bimt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = bridge.write_bundle(office(), root / "exchange")
+            saved = root / "Office.bimt"
+            result = subprocess.run([os.environ["BIMCRAFT_CLI"], "run", str(root / "exchange" / report["template"]),
+                                     "--cmd", "line_pattern {}", "--cmd", "phase {}", "--save", str(saved)],
+                                    capture_output=True, text=True, encoding="utf-8", check=True)
+            self.assertTrue(saved.exists(), result.stdout)
+            opened = json.loads(result.stdout.splitlines()[0])
+            self.assertEqual(opened["name"], "Office")
+            self.assertTrue(opened["skipped"][0].startswith("Came in from the bridge's export: 2 levels, 2 phases, 1 line pattern"))
+            self.assertIn("Office Chain", result.stdout)
+            self.assertIn("Fit Out", result.stdout)
+            started = subprocess.run([os.environ["BIMCRAFT_CLI"], "run", "--cmd", 'new {"template": %s}' % json.dumps(str(saved)),
+                                      "--cmd", 'component {"family":"Socket","type":"Large","at":[0,0]}', "--cmd", "text_type {}"],
+                                     capture_output=True, text=True, encoding="utf-8", check=True)
+            self.assertIn("Office 2mm", started.stdout)
+
+    def test_a_template_is_exported_with_its_settings_and_the_names_of_its_families_files(self):
+        template = bridge.export_template(office(), ["families/0000_Socket.rfa.json"])
+        self.assertEqual((template["format"], template["version"], template["name"]), ("bimcraft-revit-template", 1, "Office"))
+        self.assertEqual(template["levels"], [{"name": "Ground", "elevation": 0}, {"name": "Roof", "elevation": 4000}])
+        self.assertEqual(template["phases"], ["Survey", "Fit Out"])
+        self.assertEqual(template["line_patterns"][0]["segments"], [{"dash": 12.0}, {"space": 2.0}, "dot", {"space": 2.0}])
+        self.assertEqual(template["fill_patterns"][0]["lines"][0]["dashes"], [300.0, -300.0])
+        self.assertEqual(template["text_types"][0]["color"], [200, 30, 30])
+        self.assertEqual(template["families"], ["families/0000_Socket.rfa.json"])
+        # What no file should hold is dropped with a note, and the rest stays.
+        odd = office()
+        odd["levels"].append({"name": "Sky", "elevation": math.inf})
+        odd["line_patterns"].append({"name": "", "segments": []})
+        odd["fill_patterns"].append({"name": "Bad", "lines": [{"angle": math.nan}]})
+        odd["phases"].append(7)
+        odd["text_types"] = "none"
+        template = bridge.export_template(odd, [])
+        self.assertEqual(len(template["levels"]), 2)
+        self.assertEqual(len(template["line_patterns"]), 1)
+        self.assertEqual(len(template["fill_patterns"]), 1)
+        self.assertEqual(template["phases"], ["Survey", "Fit Out"])
+        self.assertEqual(template["text_types"], [])
+        self.assertEqual(len(template["notes"]), 4)
+
+    def test_bundle_holds_a_file_for_each_family_the_template_and_a_report_of_loss_and_failures(self):
+        snapshot = office()
+        snapshot["families"] = [family(), {"name": "Broken"}, "odd"]
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "exchange"
             bridge.write_bundle(snapshot, output)
@@ -112,11 +165,12 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(files, ["0000_Socket.rfa.json"])
             written = json.loads((output / "families" / files[0]).read_text(encoding="utf-8"))
             self.assertEqual(written, bridge.export_family(family()))
-            project = (output / "project.txt").read_text(encoding="utf-8").splitlines()
-            self.assertTrue(project[0].startswith("new "))
-            self.assertEqual(len(project), 3)
-            self.assertNotIn("family ", "\n".join(project))
             report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["template"], "Office.rte.json")
+            template = json.loads((output / "Office.rte.json").read_text(encoding="utf-8"))
+            self.assertEqual(template["families"], ["families/0000_Socket.rfa.json"])
+            self.assertEqual(len(template["levels"]), 2)
+            self.assertFalse((output / "project.txt").exists())
             self.assertEqual(report["exported"], ["Socket"])
             self.assertEqual(report["files"], ["families/0000_Socket.rfa.json"])
             self.assertEqual(len(report["failed"]), 2)

@@ -277,15 +277,117 @@ def read_family(document, name=None):
     return snapshot
 
 
+def element_name(element):
+    """An element's name: some engines hide the property on a subclass, so the base class is asked."""
+    try:
+        return text(element.Name)
+    except Exception:
+        return text(DB.Element.Name.GetValue(element))
+
+
+def phases(document):
+    """The project's phases, in order."""
+    return [element_name(phase) for phase in document.Phases]
+
+
+def line_patterns(document, notes):
+    """Each line pattern as its segments: a dash, a space (mm on paper) or a dot."""
+    found = []
+    for element in DB.FilteredElementCollector(document).OfClass(DB.LinePatternElement):
+        try:
+            pattern = element.GetLinePattern()
+            segments = []
+            for segment in pattern.GetSegments():
+                kind = text(segment.Type)
+                if kind == "Dot":
+                    segments.append("dot")
+                elif kind in ("Dash", "Space"):
+                    segments.append({kind.lower(): tidy(segment.Length * 304.8)})
+            found.append({"name": text(pattern.Name), "segments": segments})
+        except Exception as error:
+            notes.append("Line pattern %s not exported: %s" % (element_id(element), error))
+    return found
+
+
+def fill_patterns(document, notes):
+    """Each fill pattern as its families of lines: angle in degrees, the rest in mm (on paper, or in the model)."""
+    found = []
+    for element in DB.FilteredElementCollector(document).OfClass(DB.FillPatternElement):
+        try:
+            pattern = element.GetFillPattern()
+            lines = []
+            for grid in pattern.GetFillGrids():
+                line = {"angle": tidy(grid.Angle * 57.29577951308232), "spacing": tidy(grid.Offset * 304.8),
+                        "origin": [tidy(grid.Origin.U * 304.8), tidy(grid.Origin.V * 304.8)], "shift": tidy(grid.Shift * 304.8)}
+                # Revit lists a dash, then a space, and so on: BIMCraft writes a space as a negative length.
+                dashes = [tidy(length * 304.8) * (1 if index % 2 == 0 else -1) for index, length in enumerate(grid.GetSegments())]
+                if dashes:
+                    line["dashes"] = dashes
+                lines.append(line)
+            target = "model" if text(pattern.Target) == "Model" else "drafting"
+            found.append({"name": text(pattern.Name), "target": target, "solid": bool(pattern.IsSolidFill), "lines": lines})
+        except Exception as error:
+            notes.append("Fill pattern %s not exported: %s" % (element_id(element), error))
+    return found
+
+
+def text_types(document, notes):
+    """Each text note type: its font, its size on paper in mm, its style, its colour and its border."""
+    P = DB.BuiltInParameter
+
+    def read(element, builtin, how):
+        parameter = element.get_Parameter(builtin)
+        if parameter is None or not parameter.HasValue:
+            return None
+        return how(parameter)
+
+    found = []
+    for element in DB.FilteredElementCollector(document).OfClass(DB.TextNoteType):
+        try:
+            item = {"name": element_name(element)}
+            item["font"] = read(element, P.TEXT_FONT, lambda p: text(p.AsString()))
+            size = read(element, P.TEXT_SIZE, lambda p: p.AsDouble())
+            item["size"] = tidy(size * 304.8) if size is not None else None
+            item["bold"] = read(element, P.TEXT_STYLE_BOLD, lambda p: p.AsInteger() == 1)
+            item["italic"] = read(element, P.TEXT_STYLE_ITALIC, lambda p: p.AsInteger() == 1)
+            item["underline"] = read(element, P.TEXT_STYLE_UNDERLINE, lambda p: p.AsInteger() == 1)
+            item["width_factor"] = read(element, P.TEXT_WIDTH_SCALE, lambda p: tidy(p.AsDouble()))
+            colour = read(element, P.LINE_COLOR, lambda p: p.AsInteger())
+            if colour is not None:
+                # Revit holds a colour as one whole number, blue highest.
+                item["color"] = [colour & 255, (colour >> 8) & 255, (colour >> 16) & 255]
+            item["border"] = read(element, P.TEXT_BOX_VISIBILITY, lambda p: p.AsInteger() == 1)
+            offset = read(element, P.LEADER_OFFSET_SHEET, lambda p: p.AsDouble())
+            item["border_offset"] = tidy(offset * 304.8) if offset is not None else None
+            found.append(dict((key, value) for key, value in item.items() if value is not None))
+        except Exception as error:
+            notes.append("Text type %s not exported: %s" % (element_id(element), error))
+    return found
+
+
 def read_document(document, limit=None, progress=None):
-    """What the bridge exports of a document: the family it is, or a project's levels and its loaded editable families
+    """What the bridge exports of a document: the family it is, or a project's (or a template's) levels, phases, line and
+    fill patterns and text types, and its loaded editable families
     (the first `limit` of them, when given), each opened with EditFamily and closed unsaved. `progress(text)` hears of each."""
     snapshot = {"title": text(document.Title), "families": [], "levels": [], "notes": []}
     if document.IsFamilyDocument:
         snapshot["families"].append(read_family(document))
         return snapshot
-    snapshot["levels"] = [{"name": text(level.Name), "elevation": level.ProjectElevation * 304.8}
+    snapshot["levels"] = [{"name": element_name(level), "elevation": tidy(level.ProjectElevation * 304.8)}
                           for level in DB.FilteredElementCollector(document).OfClass(DB.Level)]
+    # The project's own settings, which make it a template: each read apart, so one that fails leaves the others.
+    for key, reader in [("line_patterns", line_patterns), ("fill_patterns", fill_patterns), ("text_types", text_types)]:
+        try:
+            snapshot[key] = reader(document, snapshot["notes"])
+        except Exception as error:
+            snapshot["notes"].append("%s not exported: %s" % (key, error))
+    try:
+        snapshot["phases"] = phases(document)
+    except Exception as error:
+        snapshot["notes"].append("phases not exported: %s" % error)
+    if progress is not None:
+        progress("settings: %s levels, %s phases, %s line patterns, %s fill patterns, %s text types" % tuple(
+            len(snapshot.get(key, [])) for key in ("levels", "phases", "line_patterns", "fill_patterns", "text_types")))
     families = list(DB.FilteredElementCollector(document).OfClass(DB.Family))
     for family in families:
         if not family.IsEditable or family.IsInPlace:

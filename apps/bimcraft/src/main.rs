@@ -333,6 +333,10 @@ fn dwg_child(_: &[String]) -> Option<ExitCode> {
 #[cfg(feature = "rvt")]
 fn revit_reader() -> Option<Importer> {
     Some(std::sync::Arc::new(|path: &Path| {
+        // A template the bridge exported from Revit is JSON of BIMCraft's own, read by the same crate.
+        if bimcraft_ui_egui::revit::is_template_export(path) {
+            return bimcraft_rvt::exchange_template_path(path);
+        }
         let stem = path.file_stem().map_or_else(|| ui_msg!("Project").into(), |s| s.to_string_lossy().into_owned());
         bimcraft_rvt::import_path(path, &stem).map_err(|e| e.to_string())
     }))
@@ -398,6 +402,14 @@ mod tests {
         // A file that is not Revit's is refused, in words, not a panic.
         std::fs::write(&file, b"not a Revit file").unwrap();
         assert!(read(&file).is_err());
+        // A template the bridge exported from Revit is read by the same reader, told by its name.
+        let export = path.join("Office.rte.json");
+        let text = r#"{"format": "bimcraft-revit-template", "version": 1, "name": "Office",
+            "phases": ["Survey", "Fit Out"], "levels": [{"name": "Ground", "elevation": 0.0}]}"#;
+        std::fs::write(&export, text).unwrap();
+        let imported = read(&export).unwrap();
+        assert_eq!((imported.model.name.as_str(), imported.schema.as_str()), ("Office", "Revit template (bridge)"));
+        assert_eq!(imported.model.phases, ["Survey", "Fit Out"]);
         let _ = std::fs::remove_dir_all(path);
     }
 

@@ -19,7 +19,8 @@ const USAGE: &str = "USAGE:
       Open FILE (a .bimc project or an earlier .bimcraft, or an .ifc or Revit .rvt file to import) or start empty, then in order: build the sample house, run
       commands and scripts (one `ID {json}` per line), save. A Revit family (.rfa) named among them is loaded into the project
       as a family, its types and their parameters, and says what the file did not give; so is one tools/revit_bridge exported
-      from Revit (.rfa.json), with its instance parameters, formulas and a mesh for each type. --save writes by extension:
+      from Revit (.rfa.json), with its instance parameters, formulas and a mesh for each type. A template the bridge exported
+      (.rte.json) opens as a project: save it as a .bimt, and `new` with `template` starts from it. --save writes by extension:
       .bimc (the project; .bimt the same), .ifc (IFC4), .glb (the 3D view's scene as glTF), .svg or .png (the lowest level's plan).
       Scripts may name a line `@name = ID {json}`; later values use `@name`, `$last`, `$-2` or a field such as `@walls.ids.0`.
       --highrise builds an original 20-storey performance sample (about 10,000 elements).
@@ -564,6 +565,40 @@ modify {"id":"$last","mark":"Entry"}"#,
         let other = revit_file("Other.rfa.json", br#"{"name": "x"}"#);
         let e = cli_out(&["run", &other]).unwrap_err();
         assert!(e.contains("Other.rfa.json") && e.contains("tools/revit_bridge"), "{e}");
+    }
+
+    #[cfg(feature = "rvt")]
+    #[test]
+    fn a_template_the_bridge_exported_from_revit_opens_as_a_project_and_saves_as_a_bimt_to_start_from() {
+        let export = json!({
+            "format": "bimcraft-revit-template", "version": 1, "name": "Office",
+            "levels": [{"name": "Ground", "elevation": 0.0}, {"name": "Roof", "elevation": 4000.0}],
+            "phases": ["Survey", "Fit Out"],
+            "line_patterns": [{"name": "Office Chain", "segments": [{"dash": 12.0}, {"space": 2.0}, "dot", {"space": 2.0}]}],
+            "text_types": [{"name": "Office 2mm", "font": "Arial", "size": 2.0}],
+        });
+        let file = revit_file("Office.rte.json", export.to_string().as_bytes());
+        let saved = std::path::Path::new(&file).with_file_name("Office.bimt").to_string_lossy().into_owned();
+        let out = cli_out(&["run", &file, "--save", &saved]).unwrap();
+        let reply: Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+        assert_eq!((reply["name"].as_str(), reply["format"].as_str()), (Some("Office"), Some("Revit template (bridge)")));
+        assert_eq!(reply["elements"]["level"], 2);
+        let notes: Vec<&str> = reply["skipped"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(notes[0].starts_with("Came in from the bridge's export: 2 levels, 2 phases, 1 line pattern"), "{notes:?}");
+        assert!(notes.iter().any(|n| n.contains("view templates")), "{notes:?}");
+        // The template saved is what a new project starts from.
+        let mut s = Session::new();
+        s.execute("new", &json!({"template": saved, "name": "Tower"})).unwrap();
+        assert_eq!(s.model.phases, ["Survey", "Fit Out"]);
+        assert!(s.model.line_patterns.contains_key("Office Chain") && s.model.text_types.contains_key("Office 2mm"));
+        assert!(s.path.is_none());
+        // `convert` takes one too, and a JSON that is not the bridge's says so.
+        let converted = saved.replace(".bimt", ".bimc");
+        cli_out(&["convert", &file, &converted]).unwrap();
+        assert!(std::path::Path::new(&converted).exists());
+        let other = revit_file("Other.rte.json", br#"{"name": "x"}"#);
+        let e = cli_out(&["run", &other]).unwrap_err();
+        assert!(e.contains("Other.rte.json") && e.contains("tools/revit_bridge"), "{e}");
     }
 
     #[cfg(not(feature = "rvt"))]
