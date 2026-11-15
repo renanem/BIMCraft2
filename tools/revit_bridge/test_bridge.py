@@ -52,6 +52,42 @@ def office():
 
 
 class BridgeTests(unittest.TestCase):
+    def test_a_bundle_holds_each_family_as_soon_as_it_is_given(self):
+        """A template of hundreds of families takes hours to read: what was read is on disk if the run stops."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "exchange"
+            snapshot = dict(office(), families=[])
+            bundle = bridge.Bundle(root)
+            bundle.settings(snapshot)
+            # The settings are a template BIMCraft opens, before any family is read.
+            first = json.loads((root / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(first["exported"], [])
+            self.assertFalse(first["complete"])
+            self.assertTrue((root / first["template"]).is_file())
+            bundle.family(family())
+            self.assertTrue((root / "families" / "0000_Socket.rfa.json").is_file())
+            # A run that stops here leaves a report and a template that name the family read.
+            report = json.loads((root / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["exported"], ["Socket"])
+            template = json.loads((root / report["template"]).read_text(encoding="utf-8"))
+            self.assertEqual(template["families"], ["families/0000_Socket.rfa.json"])
+            bundle.family(dict(family(), name="Socket"))
+            bundle.family({"name": "", "types": []})
+            snapshot["notes"] = snapshot["notes"] + ["Said at the end"]
+            done = bundle.finish(snapshot)
+            self.assertTrue(done["complete"])
+            self.assertEqual(done["exported"], ["Socket"])
+            self.assertEqual([f["reason"] for f in done["failed"]][0], "duplicate family name")
+            self.assertEqual(len(done["failed"]), 2)
+            self.assertIn("Said at the end", done["notes"])
+            self.assertEqual(done, json.loads((root / "report.json").read_text(encoding="utf-8")))
+
+    def test_write_bundle_is_the_bundle_written_at_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = bridge.write_bundle(office(), Path(directory) / "exchange")
+            self.assertTrue(report["complete"])
+            self.assertEqual(report["files"], ["families/0000_Socket.rfa.json"])
+
     @unittest.skipUnless(os.environ.get("BIMCRAFT_CLI"), "set BIMCRAFT_CLI to test the native consumer")
     def test_native_cli_loads_places_and_reopens_both_types(self):
         with tempfile.TemporaryDirectory() as directory:

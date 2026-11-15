@@ -950,3 +950,29 @@ fn a_table_that_doesnt_say_whether_a_parameter_can_be_changed_leaves_it_as_it_is
     run(&mut s, "parameter_import", json!({"path": path}));
     assert!(!s.model.parameters["Rating"].read_only, "yes says it can be changed");
 }
+
+/// A family's parameter shared by a GUID the project has a parameter of: a template's families, which share what the
+/// template's project parameters are, load. The engine puts a library entry's GUID as its name in a command's params, and a
+/// `shared` GUID is no reference to be named: it is which definition the parameter is.
+#[test]
+fn a_family_loads_whose_parameter_is_shared_by_the_guid_of_a_project_parameter() {
+    let guid = "0e83237c-c81c-44c8-a722-38afe319bd34";
+    let path = file("norma.csv");
+    std::fs::write(
+        &path,
+        format!("GUID,Name,Kind,Categories,Group,Description,Instance/Type,User Modifiable\n{guid},Norma,text,pipe,text,,instance,yes\n"),
+    )
+    .unwrap();
+    let mut s = Session::new();
+    let r = run(&mut s, "parameter_import", json!({"path": path}));
+    assert_eq!(r["create"], 1, "{r}");
+    run(
+        &mut s,
+        "family",
+        json!({"name": "Fitting", "category": "generic", "types": {"A": {}},
+               "parameters": [{"name": "Norma", "kind": "text", "shared": guid, "instance": true, "value": "ISO 17484"}]}),
+    );
+    let family = &s.model.families["Fitting"];
+    assert_eq!(family.parameters[0].shared.map(|g| g.to_string()), Some(guid.to_string()));
+    s.model.check().unwrap();
+}

@@ -784,6 +784,74 @@ fn fill_pattern(entry: &Value) -> Map<String, Value> {
     p
 }
 
+/// The most times one family is mended and tried again.
+const MAX_CLASHES: usize = 16;
+
+/// The text of `why` between `open` and the next backtick.
+fn quoted<'a>(why: &'a str, open: &str) -> Option<&'a str> {
+    let rest = why.split_once(open)?.1;
+    rest.split_once('`').map(|(name, _)| name)
+}
+
+/// A family's definition changed so the refusal `why` no longer holds, and what was done; none when it is no clash of a
+/// shared parameter's name, or the family has no such parameter.
+pub(crate) fn mend(family: &mut Value, why: &str) -> Option<String> {
+    let parameters = family.get_mut("parameters")?.as_array_mut()?;
+    if why.contains("one name is one shared parameter") || why.contains("a shared parameter has one name") {
+        // `parameter `X` is shared as …, but family `F` shares `X` as …`, or `… which family `F` calls `Y``: the one of
+        // the names the refusal says that this family has, shared.
+        let said: Vec<&str> = why.split('`').skip(1).step_by(2).collect();
+        let it = parameters.iter_mut().find(|p| {
+            p.get("shared").is_some_and(|g| !g.is_null()) && p.get("name").and_then(Value::as_str).is_some_and(|n| said.contains(&n))
+        })?;
+        let name = it.get("name").and_then(Value::as_str)?.to_string();
+        it.as_object_mut()?.remove("shared")?;
+        return Some(format!(
+            "parameter `{name}` came in untied from its shared definition: another family shares that name as another parameter, and one name is one shared parameter here"
+        ));
+    }
+    if why.contains("formula `") {
+        // `parameter `X`: formula `…`: …`: a formula that says a parameter the family no longer has (it holds so many),
+        // or that BIMCraft does not read. The parameter keeps each type's value.
+        let name = quoted(why, "parameter `")?.to_string();
+        let it = parameters.iter_mut().find(|p| p.get("name").and_then(Value::as_str) == Some(&name))?;
+        let formula = it.as_object_mut()?.remove("formula")?;
+        let shown: String = formula.as_str().unwrap_or_default().chars().take(80).collect();
+        return Some(format!(
+            "the formula of `{name}` is left out, BIMCraft does not read it here, and it keeps each type's value: `{shown}`"
+        ));
+    }
+    if why.contains("has a parameter of that name") {
+        // `parameter `X`: family `F` has a parameter of that name; name it otherwise`.
+        let name = quoted(why, "parameter `")?.to_string();
+        let taken = |n: &str, list: &[Value]| list.iter().any(|p| p.get("name").and_then(Value::as_str) == Some(n));
+        if !taken(&name, parameters) {
+            return None;
+        }
+        // A formula that says the name would no longer say this parameter.
+        if parameters.iter().any(|p| p.get("formula").and_then(Value::as_str).is_some_and(|f| f.contains(&name))) {
+            return None;
+        }
+        let other = (2..100).map(|i| format!("{name} {i}")).find(|n| !taken(n, parameters))?;
+        let it = parameters.iter_mut().find(|p| p.get("name").and_then(Value::as_str) == Some(&name))?;
+        let it = it.as_object_mut()?;
+        it.insert("name".into(), json!(other));
+        // Untied too: the same definition under two names in two families is refused as well.
+        it.remove("shared");
+        if let Some(types) = family.get_mut("types").and_then(Value::as_object_mut) {
+            for values in types.values_mut().filter_map(Value::as_object_mut) {
+                if let Some(value) = values.remove(&name) {
+                    values.insert(other.clone(), value);
+                }
+            }
+        }
+        return Some(format!(
+            "parameter `{name}` is `{other}`, untied from its shared definition: the project has a parameter of that name, which is another one"
+        ));
+    }
+    None
+}
+
 /// The families the template lists, each a file under the template's own folder, loaded with the `family` command.
 fn families(s: &mut Session, v: &Value, folder: &Path, notes: &mut Notes, said: &mut Vec<String>) -> usize {
     let mut made = 0;
@@ -806,7 +874,18 @@ fn families(s: &mut Session, v: &Value, folder: &Path, notes: &mut Notes, said: 
                 continue;
             }
         };
-        match s.execute("family", &read.family) {
+        // Revit lets two shared parameters have one name, and a family's share the name of a project parameter; here one
+        // name is one shared parameter. The family is tried again with the parameter the refusal names untied from its
+        // definition, or under another name, so it keeps its values: each a note.
+        let mut family = read.family.clone();
+        let mut done = s.execute("family", &family);
+        for _ in 0..MAX_CLASHES {
+            let Err(why) = &done else { break };
+            let Some(mended) = mend(&mut family, why) else { break };
+            said.push(format!("Family {}: {mended}", read.name));
+            done = s.execute("family", &family);
+        }
+        match done {
             Ok(_) => {
                 made += 1;
                 // What the family's own import had to say, less its first note (what came in) and its last (what a mesh is).

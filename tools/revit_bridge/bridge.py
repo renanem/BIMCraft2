@@ -194,39 +194,74 @@ def write_text(path, text):
         handle.write(TEXT_TYPE(text))
 
 
-def write_bundle(snapshot, destination):
-    """Never overwrite a previous export: `families/NNNN_name.rfa.json`, `NAME.rte.json` (the project's or template's own
-    settings, naming those families: what BIMCraft opens as a new project) and `report.json`."""
-    destination = str(destination)
-    os.makedirs(os.path.join(destination, "families"))
-    report = {"exported": [], "failed": [], "files": [], "notes": snapshot.get("notes", []),
-              "limitations": LIMITATIONS, "source": snapshot.get("title", "Revit")}
-    seen = set()
-    for index, source in enumerate(snapshot.get("families", [])):
+class Bundle(object):
+    """An export folder written as it is read, never over a previous one: `families/NNNN_name.rfa.json`, `NAME.rte.json`
+    (the project's or template's own settings, naming those families: what BIMCraft opens as a new project) and
+    `report.json`.
+
+    `settings` writes the template and the report before any family; `family` writes one family's file at once and the
+    two again, so a run that stops leaves what it read, the report saying `complete: false`; `finish` writes them last.
+    """
+
+    def __init__(self, destination):
+        self.destination = str(destination)
+        os.makedirs(os.path.join(self.destination, "families"))
+        self.report = {"exported": [], "failed": [], "files": [], "notes": [], "limitations": LIMITATIONS,
+                       "source": "Revit", "complete": False}
+        self.seen = set()
+        self.count = 0
+        self.snapshot = {}
+
+    def settings(self, snapshot):
+        self.snapshot = snapshot
+        self._write()
+
+    def family(self, source):
+        index = self.count
+        self.count += 1
         try:
             family = export_family(source)
-            if family["name"] in seen:
+            if family["name"] in self.seen:
                 raise ValueError("duplicate family name")
             encoded = encode(family)
             if len(encoded.encode("utf-8")) > MAX_FILE:
                 raise ValueError("the family's export would exceed 256 MiB")
             safe = re.sub(r'[^\w.-]', "_", family["name"], flags=re.UNICODE)[:80]
             file_name = "%04d_%s.rfa.json" % (index, safe)
-            write_text(os.path.join(destination, "families", file_name), encoded + "\n")
-            seen.add(family["name"])
-            report["exported"].append(family["name"])
-            report["files"].append("families/" + file_name)
+            write_text(os.path.join(self.destination, "families", file_name), encoded + "\n")
+            self.seen.add(family["name"])
+            self.report["exported"].append(family["name"])
+            self.report["files"].append("families/" + file_name)
         except (ValueError, KeyError, TypeError, AttributeError) as error:
             failed = source.get("name", "?") if isinstance(source, dict) else "?"
-            report["failed"].append({"family": failed, "reason": str(error)})
-    template = export_template(snapshot, report["files"])
-    safe = re.sub(r'[^\w.-]', "_", template["name"], flags=re.UNICODE)[:80]
-    report["template"] = safe + ".rte.json"
-    report["notes"] = template["notes"]
-    write_text(os.path.join(destination, report["template"]), encode(template) + "\n")
-    write_text(os.path.join(destination, "report.json"),
-               json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n")
-    return report
+            self.report["failed"].append({"family": failed, "reason": str(error)})
+        self._write()
+
+    def finish(self, snapshot=None):
+        if snapshot is not None:
+            self.snapshot = snapshot
+        self.report["complete"] = True
+        self._write()
+        return self.report
+
+    def _write(self):
+        template = export_template(self.snapshot, self.report["files"])
+        safe = re.sub(r'[^\w.-]', "_", template["name"], flags=re.UNICODE)[:80]
+        self.report["template"] = safe + ".rte.json"
+        self.report["notes"] = template["notes"]
+        self.report["source"] = self.snapshot.get("title", "Revit")
+        write_text(os.path.join(self.destination, self.report["template"]), encode(template) + "\n")
+        write_text(os.path.join(self.destination, "report.json"),
+                   json.dumps(self.report, ensure_ascii=False, allow_nan=False, indent=2) + "\n")
+
+
+def write_bundle(snapshot, destination):
+    """A whole snapshot as a bundle, at once: its settings, each of its families, the report."""
+    bundle = Bundle(destination)
+    bundle.settings(snapshot)
+    for source in snapshot.get("families", []):
+        bundle.family(source)
+    return bundle.finish()
 
 
 if __name__ == "__main__":

@@ -637,3 +637,81 @@ fn entries_left_out_for_one_reason_are_one_note() {
     assert!(about[0].starts_with("3 line patterns left out, ") && about[0].contains("`IMPORT-A`, `IMPORT-B`, `IMPORT-C`"), "{about:?}");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// What the whole hydraulic template showed: Revit lets two shared parameters have one name (a maker's `Finish` and the
+/// office's), and a family share one named as a project parameter is; here one name is one shared parameter. The family
+/// still comes in: the parameter keeps its values, untied from its definition or under another name, and the note says so.
+#[test]
+fn a_family_whose_shared_parameter_clashes_by_name_comes_in_with_it_untied_or_renamed() {
+    let dir = dir("shared-clash");
+    let mut v = office();
+    v["parameters"] = json!([{"name": "Rating", "kind": "text", "guid": "7b1d2c3e-4f50-4a61-8b72-9c83ad94be05", "scope": "instance",
+                              "categories": ["OST_Furniture"]}]);
+    let path = bundle(&dir, &v);
+    let with = |name: &str, parameter: Value, value: Value| {
+        let mut f = family(name);
+        let named = parameter["name"].as_str().unwrap().to_string();
+        f["parameters"].as_array_mut().unwrap().push(parameter);
+        f["types"][0]["values"][named] = value;
+        f
+    };
+    let finish = |guid: &str| json!({"name": "Finish", "kind": "text", "shared": guid});
+    let desk = with("Office Desk", finish("11111111-1111-4111-8111-111111111111"), json!("Oak"));
+    let chair = with("Office Chair", finish("22222222-2222-4222-8222-222222222222"), json!("Steel"));
+    std::fs::write(dir.join("families/0000_Office_Desk.rfa.json"), desk.to_string()).unwrap();
+    std::fs::write(dir.join("families/0001_Office_Chair.rfa.json"), chair.to_string()).unwrap();
+    let lamp =
+        with("Office Lamp", json!({"name": "Rating", "kind": "text", "shared": "33333333-3333-4333-8333-333333333333"}), json!("IP44"));
+    std::fs::write(dir.join("families/0002_Office_Lamp.rfa.json"), lamp.to_string()).unwrap();
+    v["families"].as_array_mut().unwrap().push(json!("families/0002_Office_Lamp.rfa.json"));
+    std::fs::write(&path, v.to_string()).unwrap();
+
+    let read = crate::exchange_template_path(&path).unwrap();
+    let all = read.skipped.join("\n");
+    let m = &read.model;
+    m.check().unwrap();
+    for name in ["Office Desk", "Office Chair", "Office Lamp"] {
+        assert!(m.families.contains_key(name), "{name}: {all}");
+    }
+    let of = |family: &str, name: &str| m.families[family].parameters.iter().find(|p| p.name == name).cloned();
+    assert!(of("Office Desk", "Finish").unwrap().shared.is_some(), "the first to share the name keeps it");
+    let untied = of("Office Chair", "Finish").unwrap_or_else(|| panic!("{all}"));
+    assert!(untied.shared.is_none(), "the second keeps the parameter, untied");
+    assert_eq!(serde_json::to_value(&m.families["Office Chair"].types["1400"]).unwrap()["Finish"], json!("Steel"), "{all}");
+    assert!(of("Office Lamp", "Rating").is_none(), "{all}");
+    let renamed = of("Office Lamp", "Rating 2").unwrap_or_else(|| panic!("{all}"));
+    assert!(renamed.shared.is_none(), "renamed, it is untied too: the same definition under two names is refused as well");
+    assert_eq!(serde_json::to_value(&m.families["Office Lamp"].types["1400"]).unwrap()["Rating 2"], json!("IP44"), "{all}");
+    assert!(read.skipped.iter().any(|n| n.contains("Office Chair") && n.contains("`Finish`") && n.contains("untied")), "{all}");
+    assert!(read.skipped.iter().any(|n| n.contains("Office Lamp") && n.contains("`Rating 2`")), "{all}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A formula the family command refuses in the project (it says a parameter the family lost to the most a family holds)
+/// leaves the family in, the parameter keeping each type's value.
+#[test]
+fn a_family_whose_formula_is_refused_in_the_project_comes_in_without_the_formula() {
+    let dir = dir("formula-refused");
+    let v = office();
+    let path = bundle(&dir, &v);
+    let mut desk = family("Office Desk");
+    desk["parameters"].as_array_mut().unwrap().push(json!({"name": "Half", "kind": "length", "formula": "Top / 2"}));
+    desk["types"][0]["values"]["Half"] = json!(700.0);
+    let mut read = crate::exchange_family(desk.to_string().as_bytes(), "desk.rfa.json").unwrap();
+    // As the reader would hand it over had `Gone` been left behind.
+    for p in read.family["parameters"].as_array_mut().unwrap() {
+        if p["name"] == "Half" {
+            p["formula"] = json!("Gone / 2");
+        }
+    }
+    let said = super::super::template::mend(
+        &mut read.family,
+        "family: parameter `Half`: formula `Gone / 2`: the following is not a valid parameter: Gone.",
+    );
+    assert!(said.is_some_and(|n| n.contains("`Half`") && n.contains("Gone / 2")));
+    let half = read.family["parameters"].as_array().unwrap().iter().find(|p| p["name"] == "Half").unwrap();
+    assert!(half.get("formula").is_none(), "{half}");
+    let mut s = bimcraft_core::engine::Session::new();
+    s.execute("family", &read.family).unwrap();
+    let _ = (std::fs::remove_dir_all(dir), path);
+}

@@ -54,6 +54,18 @@ def run():
         os.makedirs(out)
     log_path[0] = os.path.join(out, "bridge.log")
     say(u"Revit %s; job %s" % (HOST_APP.version, JOB))
+    # pyRevit's event hooks (an extension's scripts run when a document opens, changes or closes) fire for every family
+    # the bridge opens and every type it regenerates: with the developer hooks on, a template of hundreds of families
+    # stops being read. They are switched off for this session of Revit only, which ends with the run; the user's
+    # pyRevit settings are not touched. `"hooks": true` in the job leaves them on.
+    if not job.get("hooks"):
+        try:
+            from pyrevit.loader import hooks
+            hooks.unregister_all_hooks()
+            hooks.deactivate()
+            say(u"pyRevit's event hooks are off for this session")
+        except Exception:
+            say(u"pyRevit's event hooks could not be switched off: %s" % traceback.format_exc())
     exporter = imp.load_source("bimcraft_bridge_script", os.path.join(HERE[0], "script.py"))
     import bridge
     for path in job.get("documents", []):
@@ -64,14 +76,15 @@ def run():
                 options.DetachFromCentralOption = DB.DetachFromCentralOption.DetachAndPreserveWorksets
             document = HOST_APP.app.OpenDocumentFile(DB.ModelPathUtils.ConvertUserVisiblePathToModelPath(path), options)
             say(u"opened %s" % path)
-            snapshot = exporter.read_document(document, job.get("limit"), say)
             # A bundle is never written over: each document has a folder of its own, numbered where one is there.
             stem = re.sub(r"[^\w.-]", "_", os.path.basename(path), flags=re.UNICODE)
             target, number = os.path.join(out, stem), 1
             while os.path.exists(target):
                 number += 1
                 target = os.path.join(out, "%s-%s" % (stem, number))
-            report = bridge.write_bundle(snapshot, target)
+            # Written as it is read: a run that stops leaves what it read, the report saying it is not complete.
+            bundle = bridge.Bundle(target)
+            report = bundle.finish(exporter.read_document(document, job.get("limit"), say, bundle))
             say(u"wrote %s: %s families exported, %s failed, %s notes" % (
                 target, len(report["exported"]), len(report["failed"]), len(report["notes"])))
         except Exception:

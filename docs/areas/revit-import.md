@@ -203,9 +203,17 @@ each line. Entries left out for one reason are one note.
 
 `tools/revit_bridge/headless.py` runs the bridge under `pyrevit run` without its dialogs, from a job file, and
 `check_export.py` loads what it wrote into BIMCraft and says what came in; [VERIFY.md](../../tools/revit_bridge/VERIFY.md)
-is the round they make, and holds what the round of 2026-11-15 in Revit 2027 found. Not covered by it: every family of a
-large template in one run (a heavy family takes minutes and the bundle is written only at the end), and the button's own
-dialogs.
+is the round they make, and holds what the round of 2026-11-15 in Revit 2027 found. The bridge writes a bundle as it reads
+(`bridge.Bundle`: each family's file at once, the template and the report again after each, `complete` in the report), a
+family's geometry has a budget of triangles and seconds past which a type keeps its values only, and `headless.py`
+switches pyRevit's event hooks off for its own session, which is what let a template of 558 families be read in one run.
+Not covered by the round: the button's own dialogs.
+
+A family of a template is tried again when the project refuses it for one of three reasons Revit has no rule for
+(`mend`): a shared parameter whose name another family shares as another parameter comes in untied from its definition; one
+named as a project parameter is comes in as `Name 2`, untied; a formula refused comes out and the parameter keeps each
+type's value. Each is a note of the family's. In the core, the engine leaves a `shared` GUID as it is where it puts a
+library entry's GUID as its name (`engine.rs`, `named`): a family shares what the template's project parameters are.
 
 ## Revit family library exchange and project templates (fork)
 

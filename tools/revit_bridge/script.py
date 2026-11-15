@@ -10,11 +10,15 @@ from __future__ import print_function
 
 import os
 import sys
+import time
 
 from pyrevit import DB, forms, revit
 
 sys.path.insert(0, os.path.dirname(__file__))
 import bridge
+
+# The most seconds spent reading one family's geometry, over all its types.
+GEOMETRY_SECONDS = 90
 
 
 def text(value):
@@ -194,7 +198,7 @@ def options(owner):
     return found
 
 
-def triangles(geometry, output, depth=0):
+def triangles(geometry, output, depth=0, room=None):
     if depth > 32:
         raise ValueError("nested geometry exceeds 32 levels")
     if geometry is None:
@@ -202,17 +206,19 @@ def triangles(geometry, output, depth=0):
     for item in geometry:
         if isinstance(item, DB.GeometryInstance):
             # GetInstanceGeometry returns geometry in the containing document's coordinates.
-            triangles(item.GetInstanceGeometry(), output, depth + 1)
+            triangles(item.GetInstanceGeometry(), output, depth + 1, room)
         elif isinstance(item, DB.Solid):
             for face in item.Faces:
-                append_mesh(face.Triangulate(), output)
+                append_mesh(face.Triangulate(), output, room)
         elif isinstance(item, DB.Mesh):
-            append_mesh(item, output)
+            append_mesh(item, output, room)
 
 
-def append_mesh(mesh, output):
-    if len(output) + mesh.NumTriangles > bridge.MAX_TRIANGLES:
-        raise ValueError("type geometry exceeds %s triangles" % bridge.MAX_TRIANGLES)
+def append_mesh(mesh, output, room=None):
+    """`room` is how many triangles the family still has room for: past it nothing more is read."""
+    room = bridge.MAX_TRIANGLES if room is None else room
+    if len(output) + mesh.NumTriangles > room:
+        raise ValueError("geometry exceeds %s triangles" % bridge.MAX_TRIANGLES)
     for index in range(mesh.NumTriangles):
         triangle = mesh.get_Triangle(index)
         vertices = []
@@ -231,8 +237,9 @@ def is_host(document, item):
         return False
 
 
-def family_geometry(document):
-    """The triangles of what the family shows: its solid forms, its joined forms and its nested instances, never its host."""
+def family_geometry(document, room=None):
+    """The triangles of what the family shows: its solid forms, its joined forms and its nested instances, never its host.
+    Raises ValueError past `room` triangles."""
     options = DB.Options()
     options.DetailLevel = DB.ViewDetailLevel.Fine
     options.IncludeNonVisibleObjects = False
@@ -241,10 +248,10 @@ def family_geometry(document):
         if isinstance(item, DB.GenericForm):
             # A form joined to others has no geometry of its own: its combination holds it.
             if item.IsSolid and not is_host(document, item):
-                triangles(item.get_Geometry(options), output)
+                triangles(item.get_Geometry(options), output, 0, room)
         elif isinstance(item, (DB.GeomCombination, DB.FamilyInstance)):
             if not is_host(document, item):
-                triangles(item.get_Geometry(options), output)
+                triangles(item.get_Geometry(options), output, 0, room)
     return output
 
 
@@ -275,6 +282,21 @@ def read_family(document, name=None):
                 found[item["name"]] = got
         return found
 
+    # A family's geometry has a budget, of triangles and of time: a heavy family of many types took minutes, and one
+    # past the file's limit was refused whole after all of them were read. Past it a type keeps its values only.
+    used, bare, deadline = [0], [0], time.time() + GEOMETRY_SECONDS
+
+    def geometry():
+        if used[0] < bridge.MAX_TRIANGLES and time.time() < deadline:
+            try:
+                found = family_geometry(document, bridge.MAX_TRIANGLES - used[0])
+                used[0] += len(found)
+                return found
+            except ValueError:
+                used[0] = bridge.MAX_TRIANGLES
+        bare[0] += 1
+        return []
+
     transaction = DB.Transaction(document, "BIMCraft temporary type evaluation")
     try:
         if transaction.Start() != DB.TransactionStatus.Started:
@@ -287,10 +309,13 @@ def read_family(document, name=None):
                 type_name = text(current.Name)
                 if not type_name.strip():
                     type_name = snapshot["name"]
-                snapshot["types"].append({"name": type_name, "values": values(current),
-                                          "triangles": family_geometry(document)})
+                snapshot["types"].append({"name": type_name, "values": values(current), "triangles": geometry()})
         else:
-            snapshot["types"].append({"name": "Default", "values": {}, "triangles": family_geometry(document)})
+            snapshot["types"].append({"name": "Default", "values": {}, "triangles": geometry()})
+        if bare[0]:
+            snapshot["notes"].append(
+                "%s of %s types came without geometry: the family's is more than %s triangles, or took more than %s s to read"
+                % (bare[0], len(snapshot["types"]), bridge.MAX_TRIANGLES, GEOMETRY_SECONDS))
     finally:
         try:
             if transaction.GetStatus() == DB.TransactionStatus.Started:
@@ -768,14 +793,26 @@ def sheets(document, notes):
     return found
 
 
-def read_document(document, limit=None, progress=None):
+def read_document(document, limit=None, progress=None, sink=None):
     """What the bridge exports of a document: the family it is, or a project's (or a template's) levels, phases, line and
     fill patterns, line styles, text and dimension types, object styles, project parameters, view filters, view templates,
     title blocks and sheets, and its loaded editable families
-    (the first `limit` of them, when given), each opened with EditFamily and closed unsaved. `progress(text)` hears of each."""
+    (the first `limit` of them, when given), each opened with EditFamily and closed unsaved. `progress(text)` hears of each.
+
+    With a `sink` (a `bridge.Bundle`), the settings are handed to it once read and each family as it is read, and none is
+    kept here: a template of hundreds of families is hours of reading, and what was read is written if the run stops."""
     snapshot = {"title": text(document.Title), "families": [], "levels": [], "notes": []}
+
+    def keep(exported):
+        if sink is not None:
+            sink.family(exported)
+        else:
+            snapshot["families"].append(exported)
+
     if document.IsFamilyDocument:
-        snapshot["families"].append(read_family(document))
+        if sink is not None:
+            sink.settings(snapshot)
+        keep(read_family(document))
         return snapshot
     snapshot["levels"] = [{"name": element_name(level), "elevation": tidy(level.ProjectElevation * 304.8)}
                           for level in DB.FilteredElementCollector(document).OfClass(DB.Level)]
@@ -796,12 +833,15 @@ def read_document(document, limit=None, progress=None):
         progress("settings: " + ", ".join("%s %s" % (len(snapshot.get(key, [])), key) for key in (
             "levels", "phases", "line_patterns", "line_styles", "fill_patterns", "text_types", "dimension_types",
             "object_styles", "parameters", "filters", "view_templates", "title_blocks", "sheets")))
+    if sink is not None:
+        sink.settings(snapshot)
     families = list(DB.FilteredElementCollector(document).OfClass(DB.Family))
+    read = 0
     for family in families:
         if not family.IsEditable or family.IsInPlace:
             snapshot["notes"].append("Family %s (%s) is not editable or is in-place; not exported" % (family.Name, element_id(family)))
             continue
-        if limit is not None and len(snapshot["families"]) >= limit:
+        if limit is not None and read >= limit:
             snapshot["notes"].append("Only the first %s editable families of %s were exported" % (limit, len(families)))
             break
         opened = None
@@ -809,9 +849,13 @@ def read_document(document, limit=None, progress=None):
             opened = document.EditFamily(family)
             # The project knows the family by its name; its own document may hold none.
             exported = read_family(opened, text(family.Name))
-            snapshot["families"].append(exported)
+            read += 1
+            said = "%s: %s parameters, %s types, %s triangles" % (
+                exported["name"], len(exported["parameters"]), len(exported["types"]),
+                sum(len(item["triangles"]) for item in exported["types"]))
+            keep(exported)
             if progress is not None:
-                progress("%s: %s parameters, %s types" % (exported["name"], len(exported["parameters"]), len(exported["types"])))
+                progress("%s of %s %s" % (read, len(families), said))
         except RuntimeError:
             raise
         except Exception as error:
@@ -834,7 +878,9 @@ def export_active():
     destination = os.path.join(parent, "BIMCraft-exchange")
     if os.path.exists(destination):
         forms.alert("BIMCraft-exchange already exists. Select another parent folder; exports are never overwritten.", exitscript=True)
-    report = bridge.write_bundle(read_document(document), destination)
+    # Written as it is read: a run that is stopped leaves what it read, the report saying it is not complete.
+    bundle = bridge.Bundle(destination)
+    report = bundle.finish(read_document(document, sink=bundle))
     forms.alert("Exported %s families; %s failures. Read report.json.\n%s" %
                 (len(report["exported"]), len(report["failed"]), destination))
 

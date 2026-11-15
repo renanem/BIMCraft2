@@ -31,7 +31,8 @@ Escreva o que exportar em `%TEMP%\bimcraft-bridge-job.json`:
 - `documents`: templates (`.rte`), projetos (`.rvt`) e famílias (`.rfa`), em qualquer mistura. Um arquivo de versão
   anterior é convertido pelo Revit na abertura, em memória, o que demora.
 - `limit`: quantas famílias carregadas ler de cada projeto; `null` lê todas (cada uma é aberta com `EditFamily`, cerca de
-  um a dois segundos por família).
+  um a dois segundos por família; uma de muitos tipos e geometria pesada, minutos).
+- `hooks`: `true` mantém ligados os hooks de evento do pyRevit; sem isso o script os desliga na sessão que ele abre.
 
 Depois:
 
@@ -128,6 +129,36 @@ Os números do template são da rodada 4, conferidos com o leitor já corrigido.
   (o limite é 256).
 - **Padrões de linha** importados de DWG sem segmentos, ou com segmento acima de 100 mm.
 
-Ainda não coberto: a exportação de **todas** as famílias de um template grande numa execução só. A rodada 3 leu 63 das
-558 em 23 minutos (famílias pesadas levam de 2 a 4 minutos cada) e foi interrompida; o pacote só é gravado no fim, então
-nada ficou. Falta gravar cada família ao lê-la e limitar o tempo gasto na geometria. O botão (passo 4) também não rodou.
+## O template inteiro, numa execução só
+
+A primeira tentativa com as 558 famílias leu 63 em 23 minutos e parou. A causa não era a geometria: nesta instalação
+estão ligados os *hooks* de desenvolvimento do pyRevit (`pyRevitDevHooks`), scripts que rodam a cada documento aberto,
+alterado ou fechado, e a ponte abre um documento por família. Três mudanças:
+
+- `headless.py` desliga os hooks do pyRevit **só na sessão do Revit que ele abre** (as configurações do pyRevit não são
+  tocadas; `"hooks": true` na tarefa os mantém).
+- A ponte grava cada família assim que a lê (`bridge.Bundle`), e o `.rte.json` e o `report.json` a cada família: uma
+  execução interrompida deixa tudo o que leu, com `"complete": false` no relatório.
+- A geometria de uma família tem orçamento: 100 mil triângulos e 90 segundos somados nos tipos; passou disso, os tipos
+  restantes vêm só com os valores, e a nota diz quantos.
+
+Com isso o template inteiro saiu do Revit 2027 em **43 minutos**: 550 famílias exportadas, 1 recusada (tem um nome em branco, de parâmetro ou da própria família; a ponte não diz qual), 7 não editáveis (montantes e painéis de sistema). Desses 43 minutos, 26 foram de três
+famílias (`D - SEKAPISO SP80`, `SP46`, `SP30`: 13 tipos cada, até 80 mil triângulos), em que o próprio Revit demora a
+regenerar cada tipo; as outras 547 levaram cerca de 17 minutos. O pacote tem 318 MB e o `.bimt` salvo, 311 MB.
+
+No BIMCraft entraram as **550 famílias**, depois de três correções que só o pacote inteiro mostrou:
+
+- **No núcleo** (`engine.rs`): o motor troca por nome todo GUID de um comando que seja de um item da biblioteca. O GUID
+  `shared` de um parâmetro de família é o de um parâmetro de projeto quando o template tem os dois, e virava o nome: 311
+  famílias recusadas. `shared` fica como GUID, como `guid` e `definition` já ficavam.
+- **Nomes de parâmetros compartilhados**: o Revit aceita dois parâmetros compartilhados diferentes com o mesmo nome (o
+  `Acabamento` da Amanco e o da Duall) e um de família com o nome de um parâmetro de projeto (`IfcDescription`); aqui um
+  nome é um parâmetro compartilhado. A família entra com o parâmetro desvinculado da definição (236 casos) ou renomeado
+  `Nome 2` e desvinculado (281 casos), sempre com seus valores e com nota.
+- **Fórmulas** que citam um parâmetro que a família perdeu: ficam de fora (32 casos) e o parâmetro guarda o valor de cada
+  tipo.
+
+O que isso custa, e continua limite do núcleo: uma família guarda **64 parâmetros**, e 257 das 550 têm mais (as da Amanco
+têm até 90); os que passam ficam de fora, listados na nota de cada família.
+
+Ainda não rodou: o botão em si (passo 4), e o `ELE-TIPO1.rvt` com todas as suas famílias.

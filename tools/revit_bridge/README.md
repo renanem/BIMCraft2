@@ -78,7 +78,9 @@ Os testes usam apenas dados sintéticos. O formato gerado foi exercitado no CLI 
 
 A exportação de um template e de um projeto (configurações e famílias carregadas) foi executada dentro do **Revit 2027** em 2026-11-15, por `headless.py`, sobre um template de Hidráulica de 558 famílias e um projeto elétrico, e o resultado carregado no BIMCraft: os defeitos achados, o que entrou e o que ficou de fora estão em [VERIFY.md](VERIFY.md#o-que-a-rodada-de-2026-11-15-mostrou).
 
-Ainda **não** foi executado dentro do Revit: o botão em si (o diálogo de pasta e a mensagem final) e a exportação de todas as famílias de um template grande numa execução só (famílias pesadas levam minutos cada e o pacote só é gravado no fim; a rodada leu até 45 famílias por execução).
+O template inteiro (558 famílias) foi exportado numa execução só, em 43 minutos, e as 550 famílias exportadas entraram no BIMCraft; o que foi preciso para isso está em [VERIFY.md](VERIFY.md#o-template-inteiro-numa-execução-só). A ponte grava cada família ao lê-la: uma exportação interrompida deixa o que leu, com `"complete": false` em `report.json`.
+
+Ainda **não** foi executado dentro do Revit: o botão em si (o diálogo de pasta e a mensagem final). Se a exportação pelo botão ficar lenta, veja se a extensão `pyRevitDevHooks` está ligada no pyRevit: ela roda um script a cada documento aberto ou alterado, e a ponte abre um por família.
 
 Limitação conhecida, vista nessa validação: uma família aninhada de vazio que só corta ao ser carregada num projeto ("Cut with Voids When Loaded") não corta dentro do documento da família, então o hospedeiro sai maciço e o vazio sai como sólido dentro dele. Nenhuma família, template ou outro conteúdo Autodesk é distribuído neste repositório.
 
