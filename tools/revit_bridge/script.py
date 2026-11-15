@@ -501,9 +501,259 @@ def project_parameters(document, notes):
     return found
 
 
+def id_value(element_id_):
+    """An ElementId's number: `Value` from Revit 2024, `IntegerValue` before."""
+    try:
+        return element_id_.Value
+    except AttributeError:
+        return element_id_.IntegerValue
+
+
+def category_of(document, category_id):
+    """The public BuiltInCategory name of the category an id names, or None."""
+    try:
+        category = DB.Category.GetCategory(document, category_id)
+        return text(category.BuiltInCategory) if category is not None else None
+    except Exception:
+        return None
+
+
+# A rule's evaluator, a public class of the API, as BIMCraft names the comparison; and what each is when inverted.
+OPERATORS = {"FilterStringEquals": "equals", "FilterStringContains": "contains", "FilterStringBeginsWith": "begins-with",
+             "FilterStringEndsWith": "ends-with", "FilterStringGreater": "greater",
+             "FilterStringGreaterOrEqual": "greater-or-equal", "FilterStringLess": "less",
+             "FilterStringLessOrEqual": "less-or-equal", "FilterNumericEquals": "equals",
+             "FilterNumericGreater": "greater", "FilterNumericGreaterOrEqual": "greater-or-equal",
+             "FilterNumericLess": "less", "FilterNumericLessOrEqual": "less-or-equal"}
+INVERTED = {"equals": "not-equals", "contains": "not-contains", "begins-with": "not-begins-with",
+            "ends-with": "not-ends-with", "greater": "less-or-equal", "greater-or-equal": "less",
+            "less": "greater-or-equal", "less-or-equal": "greater", "has-value": "has-no-value",
+            "has-no-value": "has-value"}
+
+
+def rule_field(document, parameter_id):
+    """The name a rule's parameter is shown by, and its definition where it is a project or shared parameter."""
+    element = document.GetElement(parameter_id)
+    if element is not None:
+        try:
+            return element_name(element), element.GetDefinition()
+        except Exception:
+            return element_name(element), None
+    import System
+    builtin = System.Enum.ToObject(DB.BuiltInParameter, id_value(parameter_id))
+    return text(DB.LabelUtils.GetLabelFor(builtin)), None
+
+
+def filter_rule(document, rule):
+    """One rule as {field, op, value}; `internal` marks a number still in Revit's internal units."""
+    inverse = False
+    if isinstance(rule, DB.FilterInverseRule):
+        inverse = True
+        rule = rule.GetInnerRule()
+    field, definition = rule_field(document, rule.GetRuleParameter())
+    item = {"field": field}
+    if isinstance(rule, DB.HasValueFilterRule):
+        item["op"] = "has-value"
+    elif isinstance(rule, DB.HasNoValueFilterRule):
+        item["op"] = "has-no-value"
+    else:
+        item["op"] = OPERATORS[type(rule.GetEvaluator()).__name__]
+        if isinstance(rule, DB.FilterStringRule):
+            item["value"] = text(rule.RuleString)
+        elif isinstance(rule, DB.FilterDoubleRule):
+            found = definition_kind(definition) if definition is not None else None
+            if found in FACTORS:
+                item["value"] = tidy(rule.RuleValue * FACTORS[found])
+            elif found == "number":
+                item["value"] = rule.RuleValue
+            else:
+                # A built-in parameter's, or a data type of its own: its unit is not known here.
+                item["value"] = rule.RuleValue
+                item["internal"] = True
+        elif isinstance(rule, DB.FilterIntegerRule):
+            item["value"] = int(rule.RuleValue)
+        elif isinstance(rule, DB.FilterElementIdRule):
+            # A type, a level, a material: its name.
+            named = document.GetElement(rule.RuleValue)
+            item["value"] = element_name(named) if named is not None else ""
+    if inverse:
+        item["op"] = INVERTED[item["op"]]
+    return item
+
+
+def filter_rules(document, element_filter):
+    """A filter's rules and how they are joined: `and`, `or`, or `complex` for a tree BIMCraft has no way to say."""
+    if element_filter is None:
+        return "and", []
+    if isinstance(element_filter, DB.ElementParameterFilter):
+        return "and", [filter_rule(document, rule) for rule in element_filter.GetRules()]
+    if isinstance(element_filter, DB.ElementLogicalFilter):
+        parts = [filter_rules(document, part) for part in element_filter.GetFilters()]
+        rules = [rule for _, found in parts for rule in found]
+        if any(logic != "and" for logic, _ in parts):
+            return "complex", rules
+        if isinstance(element_filter, DB.LogicalOrFilter) and len(parts) > 1:
+            return "or", rules
+        return "and", rules
+    return "complex", []
+
+
+def view_filters(document, notes):
+    """Each view filter: its categories, its rules and how they are joined."""
+    found = []
+    for element in DB.FilteredElementCollector(document).OfClass(DB.ParameterFilterElement):
+        try:
+            categories = [category_of(document, category_id) for category_id in element.GetCategories()]
+            logic, rules = filter_rules(document, element.GetElementFilter())
+            found.append({"name": element_name(element), "categories": [c for c in categories if c], "logic": logic, "rules": rules})
+        except Exception as error:
+            notes.append("View filter %s not exported: %s" % (element_id(element), error))
+    return found
+
+
+VIEW_KINDS = {"FloorPlan": "plan", "CeilingPlan": "plan", "EngineeringPlan": "plan", "AreaPlan": "plan",
+              "Section": "section", "Elevation": "section", "Detail": "section", "ThreeD": "3d"}
+VIEW_STYLES = {"Wireframe": "wireframe", "HLR": "hidden_line", "Shading": "shaded", "ShadingWithEdges": "shaded",
+               "Realistic": "shaded", "RealisticWithEdges": "shaded", "FlatColors": "shaded"}
+
+
+def view_templates(document, notes):
+    """Each view template: the kind of view it is for, scale, detail, style, hidden categories, filters, phase, and what it controls."""
+    P = DB.BuiltInParameter
+    controlled = [(P.VIS_GRAPHICS_MODEL, "categories"), (P.VIS_GRAPHICS_FILTERS, "filters"), (P.PLAN_VIEW_RANGE, "range"),
+                  (P.VIEW_PHASE, "phase"), (P.VIEW_SCALE, "scale"), (P.VIEW_DETAIL_LEVEL, "detail"),
+                  (P.MODEL_GRAPHICS_STYLE, "style")]
+    categories = list(document.Settings.Categories)
+    found = []
+    for view in DB.FilteredElementCollector(document).OfClass(DB.View):
+        try:
+            if not view.IsTemplate:
+                continue
+            kind = text(view.ViewType)
+            item = {"name": element_name(view), "kind": VIEW_KINDS.get(kind, kind.lower()), "hide": [], "filters": []}
+            try:
+                if view.Scale > 0:
+                    item["scale"] = int(view.Scale)
+            except Exception:
+                pass
+            detail = text(view.DetailLevel).lower()
+            if detail in ("coarse", "medium", "fine"):
+                item["detail"] = detail
+            style = VIEW_STYLES.get(text(view.DisplayStyle))
+            if style:
+                item["visual_style"] = style
+            for category in categories:
+                try:
+                    if view.GetCategoryHidden(category.Id):
+                        item["hide"].append(text(category.BuiltInCategory))
+                except Exception:
+                    pass
+            try:
+                for filter_id in view.GetFilters():
+                    item["filters"].append({"filter": element_name(document.GetElement(filter_id)),
+                                            "hidden": not view.GetFilterVisibility(filter_id)})
+            except Exception:
+                pass
+            try:
+                phase = document.GetElement(view.get_Parameter(P.VIEW_PHASE).AsElementId())
+                if phase is not None:
+                    item["phase"] = element_name(phase)
+            except Exception:
+                pass
+            try:
+                free = set(id_value(parameter_id) for parameter_id in view.GetNonControlledTemplateParameterIds())
+                item["controls"] = [name for builtin, name in controlled if int(builtin) not in free]
+            except Exception:
+                pass
+            found.append(item)
+        except Exception as error:
+            notes.append("View template %s not exported: %s" % (element_id(view), error))
+    return found
+
+
+def title_block(family, opened):
+    """A title block family's lines and plain texts, mm on paper from its lower left corner. Its labels are not read."""
+    lines, texts, xs, ys = [], [], [], []
+    for curve in DB.FilteredElementCollector(opened).OfClass(DB.CurveElement):
+        try:
+            points = [[point.X * 304.8, point.Y * 304.8] for point in curve.GeometryCurve.Tessellate()]
+            if len(points) >= 2:
+                lines.append(points)
+                xs.extend(point[0] for point in points)
+                ys.extend(point[1] for point in points)
+        except Exception:
+            pass
+    for note in DB.FilteredElementCollector(opened).OfClass(DB.TextNote):
+        try:
+            item = {"at": [note.Coord.X * 304.8, note.Coord.Y * 304.8], "text": text(note.Text).strip()}
+            size = note.Symbol.get_Parameter(DB.BuiltInParameter.TEXT_SIZE)
+            if size is not None and size.HasValue:
+                item["size"] = tidy(size.AsDouble() * 304.8)
+            item["align"] = {"Center": "center", "Right": "right"}.get(text(note.HorizontalAlignment), "left")
+            if item["text"]:
+                texts.append(item)
+        except Exception:
+            pass
+    if not xs:
+        raise ValueError("it has no lines")
+    left, bottom = min(xs), min(ys)
+    return {"name": text(family.Name), "width": tidy(max(xs) - left), "height": tidy(max(ys) - bottom),
+            "lines": [{"points": [[tidy(x - left), tidy(y - bottom)] for x, y in points]} for points in lines],
+            "texts": [dict(item, at=[tidy(item["at"][0] - left), tidy(item["at"][1] - bottom)]) for item in texts]}
+
+
+def title_blocks(document, notes):
+    """Each loaded title block family, read in its own document and closed unsaved."""
+    found = []
+    for family in DB.FilteredElementCollector(document).OfClass(DB.Family):
+        opened = None
+        try:
+            if family.FamilyCategory is None or text(family.FamilyCategory.BuiltInCategory) != "OST_TitleBlocks":
+                continue
+            if not family.IsEditable:
+                notes.append("Title block %s is not editable; not exported" % family.Name)
+                continue
+            opened = document.EditFamily(family)
+            found.append(title_block(family, opened))
+        except RuntimeError:
+            raise
+        except Exception as error:
+            notes.append("Title block %s not exported: %s" % (element_id(family), error))
+        finally:
+            if opened is not None:
+                opened.Close(False)
+    return found
+
+
+def sheets(document, notes):
+    """Each sheet: its number, its name, and its size and title block from the title block placed on it."""
+    P = DB.BuiltInParameter
+    found = []
+    for sheet in DB.FilteredElementCollector(document).OfClass(DB.ViewSheet):
+        try:
+            if sheet.IsPlaceholder or sheet.IsTemplate:
+                continue
+            item = {"number": text(sheet.SheetNumber), "name": element_name(sheet)}
+            placed = DB.FilteredElementCollector(document, sheet.Id).OfCategory(DB.BuiltInCategory.OST_TitleBlocks)
+            for block in placed.WhereElementIsNotElementType():
+                width, height = block.get_Parameter(P.SHEET_WIDTH), block.get_Parameter(P.SHEET_HEIGHT)
+                if width is not None and height is not None and width.HasValue and height.HasValue:
+                    item["width"], item["height"] = tidy(width.AsDouble() * 304.8), tidy(height.AsDouble() * 304.8)
+                try:
+                    item["title_block"] = text(block.Symbol.FamilyName)
+                except Exception:
+                    pass
+                break
+            found.append(item)
+        except Exception as error:
+            notes.append("Sheet %s not exported: %s" % (element_id(sheet), error))
+    return found
+
+
 def read_document(document, limit=None, progress=None):
     """What the bridge exports of a document: the family it is, or a project's (or a template's) levels, phases, line and
-    fill patterns, line styles, text and dimension types, object styles and project parameters, and its loaded editable families
+    fill patterns, line styles, text and dimension types, object styles, project parameters, view filters, view templates,
+    title blocks and sheets, and its loaded editable families
     (the first `limit` of them, when given), each opened with EditFamily and closed unsaved. `progress(text)` hears of each."""
     snapshot = {"title": text(document.Title), "families": [], "levels": [], "notes": []}
     if document.IsFamilyDocument:
@@ -514,7 +764,8 @@ def read_document(document, limit=None, progress=None):
     # The project's own settings, which make it a template: each read apart, so one that fails leaves the others.
     for key, reader in [("line_patterns", line_patterns), ("line_styles", line_styles), ("fill_patterns", fill_patterns),
                         ("text_types", text_types), ("dimension_types", dimension_types), ("object_styles", object_styles),
-                        ("parameters", project_parameters)]:
+                        ("parameters", project_parameters), ("filters", view_filters),
+                        ("view_templates", view_templates), ("title_blocks", title_blocks), ("sheets", sheets)]:
         try:
             snapshot[key] = reader(document, snapshot["notes"])
         except Exception as error:
@@ -526,7 +777,7 @@ def read_document(document, limit=None, progress=None):
     if progress is not None:
         progress("settings: " + ", ".join("%s %s" % (len(snapshot.get(key, [])), key) for key in (
             "levels", "phases", "line_patterns", "line_styles", "fill_patterns", "text_types", "dimension_types",
-            "object_styles", "parameters")))
+            "object_styles", "parameters", "filters", "view_templates", "title_blocks", "sheets")))
     families = list(DB.FilteredElementCollector(document).OfClass(DB.Family))
     for family in families:
         if not family.IsEditable or family.IsInPlace:

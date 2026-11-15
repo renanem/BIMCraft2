@@ -38,6 +38,14 @@ def office():
             "line_styles": [{"name": "Office Demolished", "pen": 3, "color": [255, 0, 0], "pattern": "Office Chain"}],
             "dimension_types": [{"name": "Office Dim", "font": "Arial", "text_size": 2.0, "line_pen": 2}],
             "object_styles": [{"category": "OST_Walls", "projection": 2, "cut": 5}, {"category": "OST_Views", "projection": 1}],
+            "filters": [{"name": "Fire Walls", "categories": ["OST_Walls"], "logic": "and",
+                         "rules": [{"field": "Fire Rating", "op": "contains", "value": "EI"}]}],
+            "view_templates": [{"name": "Office Plan", "kind": "plan", "scale": 50, "detail": "fine", "hide": ["OST_Furniture"],
+                                "filters": [{"filter": "Fire Walls", "hidden": False}], "controls": ["scale", "filters"]}],
+            "title_blocks": [{"name": "Office A1", "width": 180.0, "height": 60.0,
+                              "lines": [{"points": [[0, 0], [180, 0], [180, 60], [0, 60]], "closed": True}],
+                              "texts": [{"at": [5, 40], "text": "OFFICE", "size": 5.0}]}],
+            "sheets": [{"number": "A-101", "name": "Ground Floor", "width": 841.0, "height": 594.0, "title_block": "Office A1"}],
             "parameters": [{"name": "Fire Rating", "kind": "text", "guid": "7b1d2c3e-4f50-4a61-8b72-9c83ad94be05",
                             "scope": "type", "categories": ["OST_Walls", "OST_Doors"]}],
             "notes": ["A nested family could not be read"]}
@@ -132,7 +140,8 @@ class BridgeTests(unittest.TestCase):
             self.assertIn("Office Chain", result.stdout)
             self.assertIn("Fit Out", result.stdout)
             self.assertIn("1 line style", opened["skipped"][0])
-            self.assertIn("1 dimension type, 1 object style, 1 parameter and 1 family", opened["skipped"][0])
+            self.assertIn("1 dimension type, 1 object style, 1 parameter, 1 view filter, 1 view template, 1 title block, "
+                          "1 sheet and 1 family", opened["skipped"][0])
             started = subprocess.run([os.environ["BIMCRAFT_CLI"], "run", "--cmd", 'new {"template": %s}' % json.dumps(str(saved)),
                                       "--cmd", 'component {"family":"Socket","type":"Large","at":[0,0]}', "--cmd", "text_type {}"],
                                      capture_output=True, text=True, encoding="utf-8", check=True)
@@ -151,6 +160,10 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(template["dimension_types"][0]["line_pen"], 2)
         self.assertEqual([style["category"] for style in template["object_styles"]], ["OST_Walls", "OST_Views"])
         self.assertEqual(template["parameters"][0]["guid"], "7b1d2c3e-4f50-4a61-8b72-9c83ad94be05")
+        self.assertEqual(template["filters"][0]["rules"][0]["op"], "contains")
+        self.assertEqual(template["view_templates"][0]["filters"], [{"filter": "Fire Walls", "hidden": False}])
+        self.assertEqual(template["title_blocks"][0]["texts"][0]["text"], "OFFICE")
+        self.assertEqual(template["sheets"][0]["number"], "A-101")
         # What no file should hold is dropped with a note, and the rest stays.
         odd = office()
         odd["levels"].append({"name": "Sky", "elevation": math.inf})

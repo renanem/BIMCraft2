@@ -4,7 +4,8 @@
 //! Like `exchange.rs`, this reads no Revit format: the bridge asks Revit's public API and writes JSON of BIMCraft's own,
 //! `bimcraft-revit-template` version 1, beside the families it exports. Each thing it lists is made here the way a user
 //! would make it, by running its command on a new project (`level`, `phase`, `line_pattern`, `line_style`, `fill_pattern`,
-//! `text_type`, `dimension_type`, `object_styles`, `parameter_import`, `family`), so the model's own rules decide what comes in: what a command refuses is left out, by name, with the
+//! `text_type`, `dimension_type`, `object_styles`, `parameter_import`, `filter`, `template`, `title_block`, `sheet`,
+//! `family`), so the model's own rules decide what comes in: what a command refuses is left out, by name, with the
 //! command's reason, and the rest comes in.
 //!
 //! ```json
@@ -23,6 +24,15 @@
 //!                       "witness_gap": 1.0, "witness_extension": 2.0, "line_extension": 0.0}],
 //!  "parameters": [{"name": "Fire Rating", "kind": "text", "guid": "0f3c9a52-…", "scope": "type",
 //!                  "group": "identity-data", "categories": ["OST_Walls", "OST_Doors"]}],
+//!  "filters": [{"name": "Fire Walls", "categories": ["OST_Walls"], "logic": "and",
+//!               "rules": [{"field": "Fire Rating", "op": "contains", "value": "EI", "internal": false}]}],
+//!  "view_templates": [{"name": "Plan", "kind": "plan", "scale": 50, "detail": "fine", "visual_style": "hidden_line",
+//!                      "hide": ["OST_Furniture"], "filters": [{"filter": "Fire Walls", "hidden": false}],
+//!                      "phase": "New Construction", "controls": ["categories", "filters", "scale", "detail"]}],
+//!  "title_blocks": [{"name": "A1", "width": 180.0, "height": 60.0,
+//!                    "lines": [{"points": [[0, 0], [180, 0]], "closed": false}],
+//!                    "texts": [{"at": [5, 40], "text": "OFFICE", "size": 5.0, "align": "left"}]}],
+//!  "sheets": [{"number": "A-101", "name": "Ground Floor", "width": 841.0, "height": 594.0, "title_block": "A1"}],
 //!  "families": ["families/0000_Desk.rfa.json"],
 //!  "notes": ["what the bridge itself could not export"]}
 //! ```
@@ -270,6 +280,284 @@ fn category(ost: &str) -> Option<&'static str> {
     })
 }
 
+/// Whether Revit's `ost` is a category of things a family makes (fixtures, fittings, accessories, equipment, devices,
+/// furniture): BIMCraft's components, whatever family category each is of.
+fn made_by_families(ost: &str) -> bool {
+    matches!(
+        ost,
+        "OST_Furniture"
+            | "OST_FurnitureSystems"
+            | "OST_Casework"
+            | "OST_PlumbingFixtures"
+            | "OST_PlumbingEquipment"
+            | "OST_PipeFitting"
+            | "OST_PipeAccessory"
+            | "OST_Sprinklers"
+            | "OST_MechanicalEquipment"
+            | "OST_MechanicalControlDevices"
+            | "OST_DuctFitting"
+            | "OST_DuctAccessory"
+            | "OST_DuctTerminal"
+            | "OST_ElectricalEquipment"
+            | "OST_ElectricalFixtures"
+            | "OST_LightingFixtures"
+            | "OST_LightingDevices"
+            | "OST_ConduitFitting"
+            | "OST_CableTrayFitting"
+            | "OST_DataDevices"
+            | "OST_TelephoneDevices"
+            | "OST_CommunicationDevices"
+            | "OST_FireAlarmDevices"
+            | "OST_SecurityDevices"
+            | "OST_NurseCallDevices"
+            | "OST_AudioVisualDevices"
+            | "OST_FireProtection"
+            | "OST_SpecialityEquipment"
+            | "OST_FoodServiceEquipment"
+            | "OST_MedicalEquipment"
+            | "OST_GenericModel"
+            | "OST_Entourage"
+            | "OST_Planting"
+            | "OST_Parking"
+            | "OST_Signage"
+            | "OST_StructConnections"
+            | "OST_StructuralStiffener"
+            | "OST_TemporaryStructure"
+            | "OST_VerticalCirculation"
+    )
+}
+
+/// The category a project parameter or a view filter of Revit's `ost` is for here: a run's own (a flexible pipe is a
+/// pipe), a built element's, and `component` for whatever a family makes, as BIMCraft's parameters and filters have it.
+/// A filter also picks from rebar, circuits, levels and sheets, which a parameter has no category for.
+fn broad_category(ost: &str, filter: bool) -> Option<&'static str> {
+    Some(match ost {
+        "OST_Walls" => "wall",
+        "OST_Floors" => "floor",
+        "OST_Ceilings" => "ceiling",
+        "OST_Roofs" => "roof",
+        "OST_Doors" => "door",
+        "OST_Windows" => "window",
+        "OST_Rooms" => "room",
+        "OST_Columns" => "column",
+        "OST_StructuralColumns" => "structuralcolumn",
+        "OST_StructuralFoundation" => "footing",
+        "OST_StructuralFraming" => "beam",
+        "OST_Stairs" => "stair",
+        "OST_Ramps" => "ramp",
+        "OST_StairsRailing" | "OST_Railings" => "railing",
+        "OST_Mass" => "mass",
+        "OST_PipeCurves" | "OST_FlexPipeCurves" | "OST_PlaceHolderPipes" => "pipe",
+        "OST_DuctCurves" | "OST_FlexDuctCurves" | "OST_PlaceHolderDucts" => "duct",
+        "OST_Conduit" => "conduit",
+        "OST_CableTray" => "cabletray",
+        "OST_Wire" => "wire",
+        "OST_ProjectInformation" if !filter => "project",
+        "OST_Rebar" if filter => "rebar",
+        "OST_ElectricalCircuit" if filter => "circuit",
+        "OST_Levels" if filter => "level",
+        "OST_Sheets" if filter => "sheet",
+        ost if made_by_families(ost) => "component",
+        _ => return None,
+    })
+}
+
+/// The category a view hides or shows for Revit's `ost`: a model category's own row (as object styles have it), or the
+/// annotation's. A category with no row of its own here (a duct fitting is one of all the components) is none: hiding
+/// the wider one would hide more than the template does.
+fn view_category(ost: &str) -> Option<&'static str> {
+    category(ost).or(match ost {
+        "OST_Dimensions" => Some("dimension"),
+        "OST_TextNotes" => Some("text"),
+        "OST_Grids" => Some("grid"),
+        "OST_Levels" => Some("level"),
+        "OST_Lines" => Some("line"),
+        "OST_Sections" => Some("section"),
+        "OST_Elev" => Some("elevation"),
+        "OST_SpotElevations" => Some("spot"),
+        "OST_SpotCoordinates" => Some("spotcoordinate"),
+        "OST_ElectricalCircuit" => Some("circuit"),
+        "OST_PointClouds" => Some("pointcloud"),
+        ost if ost.ends_with("Tags") => Some("tag"),
+        _ => None,
+    })
+}
+
+/// `names`, each once, in the order met.
+fn once<'a>(names: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
+    let mut out: Vec<&str> = Vec::new();
+    for n in names {
+        if !out.contains(&n) {
+            out.push(n);
+        }
+    }
+    out
+}
+
+/// The view filters: the elements of its categories that hold every rule. One whose rules are joined by OR, or compare a
+/// number in Revit's internal units, is left out: a filter here would pick other elements than Revit's does.
+fn view_filters(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
+    const WHAT: &str = "view filter";
+    let mut made = 0;
+    let wanted: Vec<&Value> = entries(v, "filters").collect();
+    for entry in wanted {
+        let Some(named) = name(entry) else {
+            notes.left_out(WHAT, "it has no name", &entry.to_string());
+            continue;
+        };
+        if entry.get("logic").and_then(Value::as_str).unwrap_or("and") != "and" {
+            notes.left_out(WHAT, "its rules are joined by OR, which a filter here, holding every rule, cannot say", named);
+            continue;
+        }
+        let rules: Vec<&Value> = entries(entry, "rules").collect();
+        if rules.iter().any(|r| r.get("internal").and_then(Value::as_bool).unwrap_or(false)) {
+            notes.left_out(WHAT, "a rule of it compares a number in Revit's internal units, which the bridge could not convert", named);
+            continue;
+        }
+        let given: Vec<&str> = entries(entry, "categories").filter_map(Value::as_str).collect();
+        let ours = once(given.iter().filter_map(|c| broad_category(c, true)));
+        if ours.is_empty() {
+            notes.left_out(WHAT, "none of its categories is one BIMCraft's filters pick from", named);
+            continue;
+        }
+        let dropped: Vec<&str> = given.iter().filter(|c| broad_category(c, true).is_none()).copied().collect();
+        let rules: Vec<Value> = rules.iter().map(|r| Value::Object(picked(r, &["field", "op", "value"]))).collect();
+        match s.execute("filter", &json!({"name": named, "categories": ours, "rules": rules})) {
+            Ok(_) => {
+                made += 1;
+                if !dropped.is_empty() {
+                    let listed: String = dropped.iter().take(8).copied().collect::<Vec<_>>().join(", ").chars().take(300).collect();
+                    said.push(format!("View filter {named} does not pick from these categories, which BIMCraft has none for: {listed}"));
+                }
+            }
+            Err(why) => notes.left_out(WHAT, &why, named),
+        }
+    }
+    made
+}
+
+/// The view templates: the kind of view each is for, its scale, detail level and visual style, the categories it hides,
+/// the filters it applies (hidden or not), its phase, and what it controls of the views that follow it.
+fn view_templates(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
+    const WHAT: &str = "view template";
+    const CONTROLS: [&str; 9] = ["categories", "filters", "range", "phase", "options", "scale", "detail", "style", "background_grid"];
+    let mut made = 0;
+    let wanted: Vec<&Value> = entries(v, "view_templates").collect();
+    for entry in wanted {
+        let Some(named) = name(entry) else {
+            notes.left_out(WHAT, "it has no name", &entry.to_string());
+            continue;
+        };
+        let kind = entry.get("kind").and_then(Value::as_str).unwrap_or("");
+        if !matches!(kind, "plan" | "section" | "3d") {
+            let shown: String = kind.chars().take(40).collect();
+            notes.left_out(WHAT, &format!("it is for a kind of view BIMCraft has no templates for (`{shown}`)"), named);
+            continue;
+        }
+        let mut p = picked(entry, &["scale", "detail", "visual_style"]);
+        p.insert("name".into(), json!(named));
+        p.insert("kind".into(), json!(kind));
+        let given: Vec<&str> = entries(entry, "hide").filter_map(Value::as_str).collect();
+        let hide = once(given.iter().filter_map(|c| view_category(c)));
+        if !hide.is_empty() {
+            p.insert("hide".into(), json!(hide));
+        }
+        let unhidden = once(given.iter().filter(|c| view_category(c).is_none()).copied());
+        // Only the filters that came in, and a phase the project has.
+        let mut gone: Vec<&str> = Vec::new();
+        let mut applied: Vec<Value> = Vec::new();
+        for f in entries(entry, "filters") {
+            let Some(filter) = f.get("filter").and_then(Value::as_str) else { continue };
+            if s.model.view_filters.contains_key(filter) {
+                applied.push(json!({"filter": filter, "hidden": f.get("hidden").and_then(Value::as_bool).unwrap_or(false)}));
+            } else {
+                gone.push(filter);
+            }
+        }
+        if !applied.is_empty() {
+            p.insert("filters".into(), json!(applied));
+        }
+        if let Some(phase) = entry.get("phase").and_then(Value::as_str).filter(|ph| s.model.phases.iter().any(|x| x == ph)) {
+            p.insert("phase".into(), json!(phase));
+        }
+        let controls: Vec<&str> = entries(entry, "controls").filter_map(Value::as_str).filter(|c| CONTROLS.contains(c)).collect();
+        if entry.get("controls").is_some_and(Value::is_array) {
+            p.insert("controls".into(), json!(once(controls.into_iter())));
+        }
+        match s.execute("template", &Value::Object(p)) {
+            Ok(_) => {
+                made += 1;
+                let cut =
+                    |names: &[&str]| -> String { names.iter().take(8).copied().collect::<Vec<_>>().join(", ").chars().take(300).collect() };
+                if !unhidden.is_empty() {
+                    said.push(format!(
+                        "View template {named} hides {} BIMCraft has no category of its own for, which stay shown: {}",
+                        count(unhidden.len(), "category"),
+                        cut(&unhidden)
+                    ));
+                }
+                if !gone.is_empty() {
+                    said.push(format!("View template {named} does not apply these filters, which did not come in: {}", cut(&gone)));
+                }
+            }
+            Err(why) => notes.left_out(WHAT, &why, named),
+        }
+    }
+    made
+}
+
+/// The title blocks: each a box on paper with the lines and texts drawn in it.
+fn title_blocks(s: &mut Session, v: &Value, notes: &mut Notes) -> usize {
+    each(s, v, "title_blocks", "title_block", "title block", notes, |e| {
+        let mut p = picked(e, &["width", "height"]);
+        let lines: Vec<Value> = entries(e, "lines").map(|l| Value::Object(picked(l, &["points", "closed", "pen"]))).collect();
+        let texts: Vec<Value> = entries(e, "texts").map(|t| Value::Object(picked(t, &["at", "text", "size", "angle", "align"]))).collect();
+        p.insert("lines".into(), Value::Array(lines));
+        p.insert("texts".into(), Value::Array(texts));
+        p
+    })
+}
+
+/// The sheets: each its number, name and size, drawn with its title block where that came in.
+fn sheets(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
+    let mut made = 0;
+    let wanted: Vec<&Value> = entries(v, "sheets").collect();
+    for entry in wanted {
+        let number = entry.get("number").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty());
+        let Some(number) = number else {
+            notes.left_out("sheet", "it has no number", &entry.to_string());
+            continue;
+        };
+        let taken = s.model.elements.values().any(|e| matches!(e, Element::Sheet(sheet) if sheet.number == number));
+        if taken {
+            notes.left_out("sheet", "another sheet has its number", number);
+            continue;
+        }
+        let mut p = picked(entry, &["name"]);
+        p.insert("number".into(), json!(number));
+        let side = |key: &str| entry.get(key).and_then(Value::as_f64).filter(|x| x.is_finite() && *x > 0.0);
+        if let (Some(w), Some(h)) = (side("width"), side("height")) {
+            p.insert("size".into(), json!(format!("{} x {}", (w * 10.0).round() / 10.0, (h * 10.0).round() / 10.0)));
+        }
+        let block = entry.get("title_block").and_then(Value::as_str).filter(|b| !b.trim().is_empty());
+        match block {
+            Some(block) if s.model.title_blocks.contains_key(block) => {
+                p.insert("title_block".into(), json!(block));
+            }
+            Some(block) => {
+                let shown: String = block.chars().take(60).collect();
+                said.push(format!("Sheet {number} has the built-in title block: its own, `{shown}`, did not come in"));
+            }
+            None => {}
+        }
+        match s.execute("sheet", &Value::Object(p)) {
+            Ok(_) => made += 1,
+            Err(why) => notes.left_out("sheet", &why, number),
+        }
+    }
+    made
+}
+
 /// The line styles: each its pen, colour and pattern. One whose pattern did not come in is drawn solid, and said.
 fn line_styles(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
     let mut made = 0;
@@ -343,12 +631,12 @@ fn parameters(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<Stri
             continue;
         };
         let given: Vec<&str> = entries(entry, "categories").filter_map(Value::as_str).collect();
-        let ours: Vec<&str> = given.iter().filter_map(|c| category(c)).collect();
+        let ours = once(given.iter().filter_map(|c| broad_category(c, false)));
         if ours.is_empty() {
-            notes.left_out("parameter", "none of its categories is one BIMCraft has", named);
+            notes.left_out("parameter", "none of its categories is one a project parameter here is for", named);
             continue;
         }
-        let dropped: Vec<&str> = given.iter().filter(|c| category(c).is_none()).copied().collect();
+        let dropped: Vec<&str> = given.iter().filter(|c| broad_category(c, false).is_none()).copied().collect();
         if !dropped.is_empty() {
             let listed: String = dropped.iter().take(8).copied().collect::<Vec<_>>().join(", ").chars().take(300).collect();
             said.push(format!("Parameter {named} is not for these categories, which BIMCraft has none for: {listed}"));
@@ -520,6 +808,10 @@ pub fn exchange_template_path(path: &Path) -> Result<Imported, String> {
         ),
         (object_styles(&mut s, &v, &mut notes), "object style"),
         (parameters(&mut s, &v, &mut notes, &mut said), "parameter"),
+        (view_filters(&mut s, &v, &mut notes, &mut said), "view filter"),
+        (view_templates(&mut s, &v, &mut notes, &mut said), "view template"),
+        (title_blocks(&mut s, &v, &mut notes), "title block"),
+        (sheets(&mut s, &v, &mut notes, &mut said), "sheet"),
         (families(&mut s, &v, folder, &mut notes, &mut said), "family"),
     ];
     let listed: Vec<String> = came.iter().map(|(n, what)| count(*n, what)).collect();
@@ -530,9 +822,9 @@ pub fn exchange_template_path(path: &Path) -> Result<Imported, String> {
     // What the bridge itself said it could not export.
     skipped.extend(entries(&v, "notes").filter_map(Value::as_str).take(100).map(|n| n.chars().take(500).collect::<String>()));
     skipped.push(
-        "The bridge does not export these yet, so the project has BIMCraft's own: view templates, filters, line weights \
-         (Revit's API does not give them), a dimension type's tick mark, sheets and title blocks, and the views and elements \
-         of the model"
+        "Not exported, so the project has BIMCraft's own: line weights (Revit's API does not give them), a dimension type's \
+         tick mark, a title block's labels (its lines and plain texts come in), a view template's and a filter's graphic \
+         overrides and a template's view range and phase filter, what a sheet places, and the views and elements of the model"
             .into(),
     );
     // The commands kept the model checked; a last check stands behind what is handed on.

@@ -167,9 +167,35 @@ name, told by `template::category` as the one BIMCraft has (`OST_Walls` is `wall
 none for leaves an object style out, and is dropped from a parameter with a note (a parameter left with none is left out).
 The parameters go through `parameter_import`, the import a table of them goes through: the reader writes the table to a file
 of its own in the temporary folder, runs the command with `skip_conflicts` and deletes the file, so a shared parameter keeps
-its GUID and two of one name are kept apart as that import keeps them. The last note lists what the bridge does not export
-yet: view templates, filters, line weights (Revit's API does not give them), sheets and title blocks. The script's readers
-of a template's settings have not been run inside Revit.
+its GUID and two of one name are kept apart as that import keeps them. 
+
+Three tables tell a Revit category (`template.rs`). `category` is one to one, the row object styles and a view's hidden
+categories have. `broad_category` is what a project parameter and a view filter are for: a run's own category whatever
+kind of run it is (a flexible pipe and a pipe placeholder are `pipe`, flexible ducts `duct`, conduits, cable trays, wires),
+a built element's, and `component` for everything a family makes, every MEP category among them (fittings, accessories,
+fixtures, sprinklers, mechanical and electrical equipment, lighting, data, telephone, communication, fire alarm, security
+and nurse call devices: `made_by_families`); a filter also picks from rebar, circuits, levels and sheets. What neither has
+(systems, insulation and lining, views) is dropped and said, never guessed. `view_category` adds the annotation's rows to
+`category`; a category with no row of its own (a duct fitting is one of all the components) is not hidden, since hiding the
+wider one would hide more than the template does, and the note counts them.
+
+View filters come in with their categories and rules (`filter`). The bridge flattens a filter's tree: rules joined by AND
+are its rules; joined by OR, or nested otherwise, the filter is left out, since a filter here holds every rule. A rule is
+its parameter's name, the comparison (the API's evaluator class as BIMCraft's word, inverted where the rule is) and the
+value; a number of a project or shared parameter is converted by its data type, and one whose unit is not known (a built-in
+parameter's) is marked `internal` and leaves the filter out. A rule on a field BIMCraft's categories have none of is the
+command's refusal. View templates come in for plans, sections and elevations, and 3D views (`template`): scale, detail
+level, visual style, the hidden categories, the filters applied (those that came in) and whether each hides what it picks,
+the phase, and `controls` from the parameters the template does not leave to its views; a template for a schedule, a sheet
+or a drafting view is left out. Title blocks are read in their own family documents: the lines (tessellated) and the plain
+texts, moved to the lower left corner of their extents; a label, which Revit's API does not give as one, is not read.
+Sheets come in with number, name, the size of the title block placed on them and that title block where it came in. The
+last note lists what is not exported: line weights (Revit's API does not give them), a dimension type's tick mark, a title
+block's labels, graphic overrides, a template's view range and phase filter, what a sheet places, and the model itself.
+
+The script's readers of a template's settings have not been run inside Revit. `tools/revit_bridge/headless.py` runs the
+bridge under `pyrevit run` without its dialogs, from a job file, and `check_export.py` loads what it wrote into BIMCraft
+and says what came in; [VERIFY.md](../../tools/revit_bridge/VERIFY.md) is the round they make.
 
 ## Revit family library exchange and project templates (fork)
 

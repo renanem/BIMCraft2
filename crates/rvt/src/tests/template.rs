@@ -98,11 +98,11 @@ fn a_template_from_the_bridge_comes_in_with_its_levels_phases_patterns_text_type
     assert_eq!(
         read.skipped[0],
         "Came in from the bridge's export: 3 levels, 3 phases, 2 line patterns, 0 line styles, 3 fill patterns, 1 text type, \
-         0 dimension types, 0 object styles, 0 parameters and 2 families"
+         0 dimension types, 0 object styles, 0 parameters, 0 view filters, 0 view templates, 0 title blocks, 0 sheets and 2 families"
     );
     let all = read.skipped.join("\n");
     assert!(all.contains("Family Stair (in-place) is not exported"), "{all}");
-    for missing in ["view templates", "filters", "line weights", "sheets", "title blocks"] {
+    for missing in ["line weights", "tick mark", "labels", "overrides"] {
         assert!(all.contains(missing), "the notes name {missing}: {all}");
     }
     // Saved as a template and started from, it is a project like any other.
@@ -322,7 +322,7 @@ fn line_styles_object_styles_dimension_types_and_project_parameters_come_in() {
     assert_eq!(
         read.skipped[0],
         "Came in from the bridge's export: 3 levels, 3 phases, 2 line patterns, 2 line styles, 3 fill patterns, 1 text type, \
-         1 dimension type, 3 object styles, 2 parameters and 2 families"
+         1 dimension type, 3 object styles, 2 parameters, 0 view filters, 0 view templates, 0 title blocks, 0 sheets and 2 families"
     );
     let all = read.skipped.join("\n");
     assert!(read.skipped.iter().any(|n| n.starts_with("1 parameter left out, ") && n.contains("`Sheet Issue`")), "{all}");
@@ -365,5 +365,177 @@ fn styles_and_parameters_a_command_refuses_are_left_out_by_name() {
     // A second parameter of a name is kept apart, as the import of a table keeps it, and the first is as it was.
     assert_eq!(serde_json::to_value(&m.parameters["Fire Rating"]).unwrap()["kind"], "text");
     assert!(m.parameters.len() >= 2);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_project_parameter_is_for_every_mep_category_revit_has_as_the_category_bimcraft_has() {
+    let dir = dir("mep");
+    // Runs are their own categories; everything a family makes (fittings, accessories, equipment, devices) is a component.
+    let runs = [
+        ("OST_PipeCurves", "pipe"),
+        ("OST_FlexPipeCurves", "pipe"),
+        ("OST_PlaceHolderPipes", "pipe"),
+        ("OST_DuctCurves", "duct"),
+        ("OST_FlexDuctCurves", "duct"),
+        ("OST_PlaceHolderDucts", "duct"),
+        ("OST_Conduit", "conduit"),
+        ("OST_CableTray", "cabletray"),
+        ("OST_Wire", "wire"),
+    ];
+    let made = [
+        "OST_PipeFitting",
+        "OST_PipeAccessory",
+        "OST_PlumbingFixtures",
+        "OST_PlumbingEquipment",
+        "OST_Sprinklers",
+        "OST_MechanicalEquipment",
+        "OST_MechanicalControlDevices",
+        "OST_DuctFitting",
+        "OST_DuctAccessory",
+        "OST_DuctTerminal",
+        "OST_ElectricalEquipment",
+        "OST_ElectricalFixtures",
+        "OST_LightingFixtures",
+        "OST_LightingDevices",
+        "OST_ConduitFitting",
+        "OST_CableTrayFitting",
+        "OST_DataDevices",
+        "OST_TelephoneDevices",
+        "OST_CommunicationDevices",
+        "OST_FireAlarmDevices",
+        "OST_SecurityDevices",
+        "OST_NurseCallDevices",
+        "OST_AudioVisualDevices",
+        "OST_FireProtection",
+        "OST_SpecialityEquipment",
+        "OST_GenericModel",
+    ];
+    let mut v = office();
+    let mut parameters: Vec<Value> =
+        runs.iter().map(|(ost, _)| json!({"name": format!("On {ost}"), "kind": "text", "categories": [ost]})).collect();
+    parameters.extend(made.iter().map(|ost| json!({"name": format!("On {ost}"), "kind": "text", "categories": [ost]})));
+    // What BIMCraft's parameters have no category for: said, never guessed.
+    parameters.push(json!({"name": "On systems", "kind": "text", "categories": ["OST_PipingSystem", "OST_DuctSystem", "OST_ElectricalCircuit", "OST_PipeInsulations"]}));
+    v["parameters"] = json!(parameters);
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let m = &read.model;
+    for (ost, ours) in runs {
+        let p = serde_json::to_value(&m.parameters[&format!("On {ost}")]).unwrap();
+        assert_eq!(p["categories"], json!([ours]), "{ost}");
+    }
+    for ost in made {
+        let p = serde_json::to_value(&m.parameters[&format!("On {ost}")]).unwrap();
+        assert_eq!(p["categories"], json!(["component"]), "{ost}");
+    }
+    assert!(!m.parameters.contains_key("On systems"));
+    let all = read.skipped.join("\n");
+    assert!(read.skipped.iter().any(|n| n.starts_with("1 parameter left out, ") && n.contains("`On systems`")), "{all}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The office's template with its view filters, view templates, title block and sheets.
+fn drawn() -> Value {
+    let mut v = styled();
+    v["filters"] = json!([
+        {"name": "Fire Walls", "categories": ["OST_Walls", "OST_Doors"], "logic": "and",
+         "rules": [{"field": "Fire Rating", "op": "contains", "value": "EI"}]},
+        {"name": "All Pipes", "categories": ["OST_PipeCurves", "OST_FlexPipeCurves", "OST_PipeFitting"], "logic": "and", "rules": []},
+    ]);
+    v["view_templates"] = json!([
+        {"name": "Office Plan", "kind": "plan", "scale": 50, "detail": "fine", "visual_style": "hidden_line",
+         "hide": ["OST_Furniture", "OST_Grids", "OST_DuctFitting", "OST_Furniture"],
+         "filters": [{"filter": "Fire Walls", "hidden": false}, {"filter": "All Pipes", "hidden": true}, {"filter": "Gone", "hidden": true}],
+         "phase": "Fit Out", "controls": ["categories", "filters", "scale", "detail", "nonsense"]},
+        {"name": "Office 3D", "kind": "3d", "detail": "medium", "visual_style": "shaded", "hide": [], "filters": []},
+    ]);
+    v["title_blocks"] = json!([
+        {"name": "Office A1", "width": 180.0, "height": 60.0,
+         "lines": [{"points": [[0.0, 0.0], [180.0, 0.0], [180.0, 60.0], [0.0, 60.0]], "closed": true}, {"points": [[0.0, 30.0], [180.0, 30.0]]}],
+         "texts": [{"at": [5.0, 40.0], "text": "OFFICE", "size": 5.0}, {"at": [5.0, 10.0], "text": "Drawn by", "size": 2.0, "align": "left"}]},
+    ]);
+    v["sheets"] = json!([
+        {"number": "A-101", "name": "Ground Floor", "width": 841.0, "height": 594.0, "title_block": "Office A1"},
+        {"number": "A-102", "name": "First Floor", "width": 841.0, "height": 594.0, "title_block": "Unknown Block"},
+    ]);
+    v
+}
+
+#[test]
+fn view_filters_view_templates_title_blocks_and_sheets_come_in() {
+    let dir = dir("drawn");
+    let read = crate::exchange_template_path(&bundle(&dir, &drawn())).unwrap();
+    let m = &read.model;
+    m.check().unwrap();
+    let all = read.skipped.join("\n");
+    // A filter: its categories as BIMCraft's, once each, and its rule on the project parameter that came in before it.
+    let fire = serde_json::to_value(&m.view_filters["Fire Walls"]).unwrap();
+    assert_eq!(fire["categories"], json!(["door", "wall"]), "{fire}");
+    assert_eq!(fire["rules"][0]["field"], "Fire Rating");
+    assert_eq!(serde_json::to_value(&m.view_filters["All Pipes"]).unwrap()["categories"], json!(["component", "pipe"]));
+    // A view template: its kind, scale, detail and style, what it hides, the filters it applies, and what it controls.
+    let mut s = bimcraft_core::engine::Session::new();
+    s.reset(m.clone(), None);
+    let plan = s.execute("template", &json!({"name": "Office Plan"})).unwrap().to_string();
+    for part in ["\"plan\"", "furniture", "grid", "Fire Walls", "All Pipes", "Fit Out"] {
+        assert!(plan.contains(part), "{part}: {plan}");
+    }
+    assert!(!plan.contains("Gone"), "a filter that did not come in is not applied: {plan}");
+    assert!(m.view_templates.contains_key("Office 3D"));
+    assert!(all.contains("Office Plan") && all.contains("OST_DuctFitting"), "a hidden category with none here is said: {all}");
+    // A title block: its box, lines and texts; and the sheets, of their size, drawn with it where it came in.
+    let block = &m.title_blocks["Office A1"];
+    assert_eq!(serde_json::to_value(block).unwrap()["texts"][0]["text"], "OFFICE");
+    let sheets: Vec<(String, String, String, String)> = m
+        .elements
+        .values()
+        .filter_map(|e| {
+            if let Element::Sheet(s) = e { Some((s.number.clone(), s.name.clone(), s.size.clone(), s.title_block.clone())) } else { None }
+        })
+        .collect();
+    assert!(sheets.contains(&("A-101".into(), "Ground Floor".into(), "841 X 594".into(), "Office A1".into())), "{sheets:?}");
+    let second = sheets.iter().find(|s| s.0 == "A-102").unwrap_or_else(|| panic!("{sheets:?}"));
+    assert_eq!(second.3, "", "a title block that did not come in leaves the sheet the built-in one");
+    assert!(all.contains("A-102") && all.contains("Unknown Block"), "{all}");
+    assert!(read.skipped[0].contains("2 view filters, 2 view templates, 1 title block, 2 sheets and 2 families"), "{}", read.skipped[0]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn filters_and_templates_bimcraft_cannot_say_are_left_out_with_why() {
+    let dir = dir("drawn-refused");
+    let mut v = drawn();
+    v["filters"].as_array_mut().unwrap().extend([
+        json!({"name": "Either", "categories": ["OST_Walls"], "logic": "or", "rules": [{"field": "Fire Rating", "op": "equals", "value": "EI60"}]}),
+        json!({"name": "In Feet", "categories": ["OST_Walls"], "logic": "and", "rules": [{"field": "Length", "op": "greater", "value": 3.0, "internal": true}]}),
+        json!({"name": "No Field", "categories": ["OST_Walls"], "logic": "and", "rules": [{"field": "Nowhere", "op": "equals", "value": "x"}]}),
+        json!({"name": "Only Views", "categories": ["OST_Views"], "logic": "and", "rules": []}),
+        json!(3),
+    ]);
+    v["view_templates"]
+        .as_array_mut()
+        .unwrap()
+        .extend([json!({"name": "Office Schedule", "kind": "schedule"}), json!({"name": "Odd Scale", "kind": "plan", "scale": -4})]);
+    v["title_blocks"].as_array_mut().unwrap().push(json!({"name": "Huge", "width": 1.0e9, "height": 1.0}));
+    v["sheets"].as_array_mut().unwrap().push(json!({"number": "A-101", "name": "Twice", "width": 841.0, "height": 594.0}));
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let m = &read.model;
+    m.check().unwrap();
+    let all = read.skipped.join("\n");
+    for (name, why) in [("Either", "OR"), ("In Feet", "internal units"), ("No Field", "Nowhere"), ("Only Views", "categories")] {
+        assert!(!m.view_filters.contains_key(name), "{name}");
+        assert!(
+            read.skipped
+                .iter()
+                .any(|n| n.contains("view filter") && n.contains("left out") && n.contains(&format!("`{name}`")) && n.contains(why)),
+            "{name}: {all}"
+        );
+    }
+    assert!(m.view_filters.contains_key("Fire Walls"));
+    assert!(!m.view_templates.contains_key("Office Schedule") && !m.view_templates.contains_key("Odd Scale"));
+    assert!(read.skipped.iter().any(|n| n.contains("view template") && n.contains("`Office Schedule`") && n.contains("schedule")), "{all}");
+    assert!(m.view_templates.contains_key("Office Plan"));
+    assert!(!m.title_blocks.contains_key("Huge") && m.title_blocks.contains_key("Office A1"));
+    assert_eq!(m.elements.values().filter(|e| matches!(e, Element::Sheet(_))).count(), 2, "the sheet numbered twice is left out");
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -30,7 +30,7 @@ O botão exporta a família ativa, ou todas as famílias carregadas editáveis d
 A pasta criada contém:
 
 - `families/NNNN_nome.rfa.json`: um arquivo por família, no formato `bimcraft-revit-family` versão 1 (descrito no topo de `crates/rvt/src/exchange.rs`);
-- `NOME.rte.json`: as configurações do projeto ou template, no formato `bimcraft-revit-template` versão 1 (descrito no topo de `crates/rvt/src/template.rs`): níveis, fases, padrões de linha, estilos de linha, padrões de preenchimento, tipos de texto, tipos de cota, estilos de objeto e parâmetros de projeto (os compartilhados com seu GUID), mais os nomes dos arquivos das famílias;
+- `NOME.rte.json`: as configurações do projeto ou template, no formato `bimcraft-revit-template` versão 1 (descrito no topo de `crates/rvt/src/template.rs`): níveis, fases, padrões de linha, estilos de linha, padrões de preenchimento, tipos de texto, tipos de cota, estilos de objeto, parâmetros de projeto (os compartilhados com seu GUID), filtros de vista, modelos de vista, carimbos e folhas, mais os nomes dos arquivos das famílias;
 - `report.json`: famílias exportadas, recusadas e por quê, e as limitações.
 
 ## Abrir no BIMCraft
@@ -42,13 +42,19 @@ A pasta criada contém:
 bimcraft-cli run "C:\projetos\existente.bimc" "C:\exportacao\BIMCraft-exchange\families\0000_Tomada.rfa.json" --save "C:\projetos\com-familia.bimc"
 ```
 
-- **O template inteiro** (níveis, fases, padrões e estilos de linha, padrões de preenchimento, tipos de texto e de cota, estilos de objeto, parâmetros de projeto e todas as famílias exportadas): abra o `NOME.rte.json` em **File → Open**, confira o relatório e use **Save As** com a extensão `.bimt`. O template salvo passa a aparecer em **File → New → Project from Template…**. Pela linha de comando:
+- **O template inteiro** (níveis, fases, padrões e estilos de linha, padrões de preenchimento, tipos de texto e de cota, estilos de objeto, parâmetros de projeto, filtros, modelos de vista, carimbos, folhas e todas as famílias exportadas): abra o `NOME.rte.json` em **File → Open**, confira o relatório e use **Save As** com a extensão `.bimt`. O template salvo passa a aparecer em **File → New → Project from Template…**. Pela linha de comando:
 
 ```powershell
 bimcraft-cli run "C:\exportacao\BIMCraft-exchange\Escritorio.rte.json" --save "C:\modelos\Escritorio.bimt"
 ```
 
-O que um comando do BIMCraft recusar (um padrão com segmento fora do limite, um nível repetido) fica de fora, pelo nome, com o motivo, no relatório. Uma categoria do Revit sem equivalente no BIMCraft deixa o estilo de objeto de fora e sai da lista de categorias do parâmetro (um parâmetro que fique sem nenhuma categoria fica de fora), tudo dito no relatório. Ainda **não** são exportados: modelos de vista, filtros, espessuras de linha (a API do Revit não as entrega), a marca de extremidade dos tipos de cota, folhas e carimbos; o projeto fica com os do próprio BIMCraft.
+O que um comando do BIMCraft recusar (um padrão com segmento fora do limite, um nível repetido) fica de fora, pelo nome, com o motivo, no relatório. **Categorias.** Para parâmetros de projeto e filtros, toda categoria MEP do Revit tem destino: tubos, tubos flexíveis e espaços reservados de tubo são `pipe`; dutos e dutos flexíveis, `duct`; eletrodutos, eletrocalhas e fios têm a sua; e tudo que uma família faz (conexões, acessórios, peças hidráulicas, sprinklers, equipamentos mecânicos e elétricos, luminárias, dispositivos de dados, telefonia, comunicação, alarme de incêndio, segurança e chamada de enfermagem) é `component`, que é como o BIMCraft trata componentes em parâmetros e filtros. Sistemas (de tubulação, de dutos), isolamento e revestimento, e vistas não têm categoria de parâmetro no BIMCraft: saem da lista, com aviso no relatório. Nos estilos de objeto e nas categorias ocultas de um modelo de vista o mapa é um para um, então uma categoria sem linha própria no BIMCraft (conexão de duto, sprinkler) fica de fora e é contada.
+
+**Filtros e modelos de vista.** Um filtro entra com categorias e regras. Regras unidas por OU, ou uma regra numérica sobre parâmetro interno do Revit (cuja unidade a ponte não sabe converter), deixam o filtro de fora, com o motivo. Um modelo de vista entra para plantas, cortes/elevações e 3D, com escala, nível de detalhe, estilo visual, categorias ocultas, filtros aplicados, fase e o que ele controla; modelos de tabela, folha ou vista de desenho ficam de fora.
+
+**Carimbos e folhas.** Do carimbo vêm as linhas e os textos fixos; os rótulos (que a API do Revit não entrega como rótulos) não vêm. A folha vem com número, nome, tamanho e carimbo.
+
+Ainda **não** são exportados: espessuras de linha (a API do Revit não as entrega), a marca de extremidade dos tipos de cota, os rótulos dos carimbos, as sobreposições gráficas de modelos de vista e filtros, o intervalo de vista e o filtro de fase dos modelos de vista, o que cada folha contém, e o modelo em si.
 
 Cada família carregada responde com o que entrou e, em `skipped`, o que ficou de fora e por quê. Uma família de mesmo nome já existente no projeto é atualizada pelo comando `family`; a tela do aplicativo pede outro nome em vez disso. Portas e janelas mantêm a categoria só quando têm os parâmetros de comprimento `Width` e `Height`; sem eles entram como genéricas, e seus hospedeiros e aberturas não são reconstruídos. Categorias sem equivalente também são genéricas.
 
@@ -70,7 +76,7 @@ Para incluir o teste de integração com um CLI compilado, defina `BIMCRAFT_CLI`
 
 Os testes usam apenas dados sintéticos. O formato gerado foi exercitado no CLI nativo: dois tipos com geometrias diferentes, parâmetro de instância, fórmula, parâmetro compartilhado, e salvamento/reabertura. A leitura de famílias (`read_family`) foi executada dentro do **Revit 2027** (2027.0, pyRevit 6.4, IronPython 2.7.12 sobre .NET 10) em 2026-11-14, por `pyrevit run`, em duas famílias da biblioteca instalada com o Revit, abertas no lugar e fechadas sem salvar: uma baseada em face, com quatro tipos, fórmulas e formas unidas, e uma com famílias aninhadas. A exportação foi carregada no BIMCraft e conferida: a caixa da malha de cada tipo é igual ao seu parâmetro de comprimento, e as quatro fórmulas são avaliadas. Essa execução corrigiu três defeitos: o nome da família vinha vazio num documento de família aberto direto (`OwnerFamily.Name`), comprimentos de tipo de dado específico saíam como número, e o sólido hospedeiro do molde baseado em face era exportado no lugar das formas unidas.
 
-Ainda **não** foi executado dentro do Revit: o botão em si (o diálogo de pasta e a mensagem final), a exportação completa a partir de um projeto (a leitura das famílias carregadas por `EditFamily` rodou em 21 famílias de um projeto real antes de ser interrompida) e a leitura das configurações do template (fases, padrões e estilos de linha, padrões de preenchimento, tipos de texto e de cota, estilos de objeto, parâmetros de projeto).
+Ainda **não** foi executado dentro do Revit: o botão em si (o diálogo de pasta e a mensagem final), a exportação completa a partir de um projeto (a leitura das famílias carregadas por `EditFamily` rodou em 21 famílias de um projeto real antes de ser interrompida) e a leitura das configurações do template (fases, padrões e estilos de linha, padrões de preenchimento, tipos de texto e de cota, estilos de objeto, parâmetros de projeto, filtros, modelos de vista, carimbos e folhas). A rodada que cobre isso está em [VERIFY.md](VERIFY.md): `headless.py` roda a ponte no Revit sem diálogos e `check_export.py` confere o resultado no BIMCraft.
 
 Limitação conhecida, vista nessa validação: uma família aninhada de vazio que só corta ao ser carregada num projeto ("Cut with Voids When Loaded") não corta dentro do documento da família, então o hospedeiro sai maciço e o vazio sai como sólido dentro dele. Nenhuma família, template ou outro conteúdo Autodesk é distribuído neste repositório.
 
