@@ -3,8 +3,8 @@
 //!
 //! Like `exchange.rs`, this reads no Revit format: the bridge asks Revit's public API and writes JSON of BIMCraft's own,
 //! `bimcraft-revit-template` version 1, beside the families it exports. Each thing it lists is made here the way a user
-//! would make it, by running its command on a new project (`level`, `phase`, `line_pattern`, `fill_pattern`, `text_type`,
-//! `family`), so the model's own rules decide what comes in: what a command refuses is left out, by name, with the
+//! would make it, by running its command on a new project (`level`, `phase`, `line_pattern`, `line_style`, `fill_pattern`,
+//! `text_type`, `dimension_type`, `object_styles`, `parameter_import`, `family`), so the model's own rules decide what comes in: what a command refuses is left out, by name, with the
 //! command's reason, and the rest comes in.
 //!
 //! ```json
@@ -16,12 +16,21 @@
 //!                     "lines": [{"angle": 45.0, "spacing": 3.0, "origin": [0.0, 0.0], "shift": 0.0, "dashes": [2.0, -1.0]}]}],
 //!  "text_types": [{"name": "2mm", "font": "Arial", "size": 2.0, "bold": false, "italic": false, "underline": false,
 //!                  "width_factor": 1.0, "color": [0, 0, 0], "border": false, "border_offset": 1.0}],
+//!  "line_styles": [{"name": "Demolished", "pen": 3, "color": [255, 0, 0], "pattern": "Dash"}],
+//!  "object_styles": [{"category": "OST_Walls", "projection": 2, "cut": 5}],
+//!  "dimension_types": [{"name": "2mm", "font": "Arial", "text_size": 2.0, "bold": false, "italic": false,
+//!                       "underline": false, "width_factor": 1.0, "color": [0, 0, 0], "line_pen": 1, "text_offset": 1.0,
+//!                       "witness_gap": 1.0, "witness_extension": 2.0, "line_extension": 0.0}],
+//!  "parameters": [{"name": "Fire Rating", "kind": "text", "guid": "0f3c9a52-…", "scope": "type",
+//!                  "group": "identity-data", "categories": ["OST_Walls", "OST_Doors"]}],
 //!  "families": ["families/0000_Desk.rfa.json"],
 //!  "notes": ["what the bridge itself could not export"]}
 //! ```
 //!
 //! Lengths are millimetres (a pattern's and a text type's on paper, a level's and a model pattern's in the building),
-//! angles degrees. A family is a path under the template file's own folder, in `exchange.rs`'s format.
+//! angles degrees. A pen is Revit's line weight, 1 to 16. A category is the `BuiltInCategory` name of Revit's public API
+//! (`OST_Walls`), told here as the category BIMCraft has for it; one it has none for is left out and said. A family is a
+//! path under the template file's own folder, in `exchange.rs`'s format.
 
 use std::path::{Component, Path};
 use std::sync::Arc;
@@ -216,6 +225,181 @@ fn each(
     made
 }
 
+/// The category BIMCraft has for Revit's `ost`, a `BuiltInCategory` name of its public API: what object styles and project
+/// parameters are told by.
+fn category(ost: &str) -> Option<&'static str> {
+    Some(match ost {
+        "OST_Walls" => "wall",
+        "OST_Floors" => "floor",
+        "OST_Ceilings" => "ceiling",
+        "OST_Roofs" => "roof",
+        "OST_Doors" => "door",
+        "OST_Windows" => "window",
+        "OST_Rooms" => "room",
+        "OST_Columns" => "column",
+        "OST_StructuralColumns" => "structuralcolumn",
+        "OST_StructuralFoundation" => "footing",
+        "OST_StructuralFraming" => "beam",
+        "OST_PipeCurves" => "pipe",
+        "OST_DuctCurves" => "duct",
+        "OST_Conduit" => "conduit",
+        "OST_CableTray" => "cabletray",
+        "OST_Wire" => "wire",
+        "OST_Rebar" => "rebar",
+        "OST_Furniture" => "furniture",
+        "OST_Casework" => "casework",
+        "OST_PlumbingFixtures" => "plumbing",
+        "OST_PipeFitting" => "pipefitting",
+        "OST_PipeAccessory" => "pipeaccessory",
+        "OST_ElectricalEquipment" => "equipment",
+        "OST_ElectricalFixtures" => "outlet",
+        "OST_LightingDevices" => "switch",
+        "OST_LightingFixtures" => "lighting",
+        "OST_DuctTerminal" => "airterminal",
+        "OST_DataDevices" => "dataoutlet",
+        "OST_TelephoneDevices" => "voiceoutlet",
+        "OST_GenericModel" => "generic",
+        "OST_Stairs" => "stair",
+        "OST_Ramps" => "ramp",
+        "OST_StairsRailing" => "railing",
+        "OST_Mass" => "mass",
+        "OST_Site" => "site",
+        "OST_ShaftOpening" => "shaft",
+        "OST_RoomSeparationLines" => "roomseparator",
+        _ => return None,
+    })
+}
+
+/// The line styles: each its pen, colour and pattern. One whose pattern did not come in is drawn solid, and said.
+fn line_styles(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
+    let mut made = 0;
+    let wanted: Vec<&Value> = entries(v, "line_styles").collect();
+    for entry in wanted {
+        let Some(named) = name(entry) else {
+            notes.left_out("line style", "it has no name", &entry.to_string());
+            continue;
+        };
+        let mut p = picked(entry, &["pen", "color", "pattern"]);
+        p.insert("name".into(), json!(named));
+        let pattern = entry.get("pattern").and_then(Value::as_str).map(str::to_string);
+        match s.execute("line_style", &Value::Object(p.clone())) {
+            Ok(_) => made += 1,
+            Err(why) => {
+                p.remove("pattern");
+                match (pattern, s.execute("line_style", &Value::Object(p))) {
+                    (Some(pattern), Ok(_)) => {
+                        made += 1;
+                        let shown: String = pattern.chars().take(60).collect();
+                        said.push(format!("Line style {named} is drawn solid: its pattern `{shown}` did not come in"));
+                    }
+                    _ => notes.left_out("line style", &why, named),
+                }
+            }
+        }
+    }
+    made
+}
+
+/// The object styles: the pen each category draws in where it is seen and where it is cut, one command a category so
+/// that one the command refuses leaves the others.
+fn object_styles(s: &mut Session, v: &Value, notes: &mut Notes) -> usize {
+    let mut made = 0;
+    let wanted: Vec<&Value> = entries(v, "object_styles").collect();
+    for entry in wanted {
+        let Some(ost) = entry.get("category").and_then(Value::as_str) else {
+            notes.left_out("object style", "it names no category", &entry.to_string());
+            continue;
+        };
+        let Some(ours) = category(ost) else {
+            notes.left_out("object style", "BIMCraft has no category for Revit's", ost);
+            continue;
+        };
+        let pens = picked(entry, &["projection", "cut"]);
+        if pens.is_empty() {
+            continue;
+        }
+        match s.execute("object_styles", &json!({"categories": {ours: pens}})) {
+            Ok(_) => made += 1,
+            Err(why) => notes.left_out("object style", &why, ost),
+        }
+    }
+    made
+}
+
+/// A cell of the parameters' table: on one line, quoted.
+fn cell(text: &str) -> String {
+    let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).take(bimcraft_core::model::MAX_TEXT).collect();
+    format!("\"{}\"", flat.replace('"', "\"\""))
+}
+
+/// The project parameters, through the import a table of them goes through (`parameter_import`), which keeps a shared
+/// parameter's GUID and keeps apart two of one name: the table is written to a file of its own and read back.
+fn parameters(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
+    let mut rows = vec!["GUID,Name,Kind,Categories,Group,Description,Instance/Type,User Modifiable".to_string()];
+    let wanted: Vec<&Value> = entries(v, "parameters").collect();
+    for entry in wanted {
+        let Some(named) = name(entry) else {
+            notes.left_out("parameter", "it has no name", &entry.to_string());
+            continue;
+        };
+        let given: Vec<&str> = entries(entry, "categories").filter_map(Value::as_str).collect();
+        let ours: Vec<&str> = given.iter().filter_map(|c| category(c)).collect();
+        if ours.is_empty() {
+            notes.left_out("parameter", "none of its categories is one BIMCraft has", named);
+            continue;
+        }
+        let dropped: Vec<&str> = given.iter().filter(|c| category(c).is_none()).copied().collect();
+        if !dropped.is_empty() {
+            let listed: String = dropped.iter().take(8).copied().collect::<Vec<_>>().join(", ").chars().take(300).collect();
+            said.push(format!("Parameter {named} is not for these categories, which BIMCraft has none for: {listed}"));
+        }
+        let text = |key: &str| entry.get(key).and_then(Value::as_str).unwrap_or("");
+        // A data type with no kind here is a number, as the table's own reader takes it.
+        let kind = match text("kind") {
+            "material" | "url" => "text",
+            "other" | "" => "number",
+            kind => kind,
+        };
+        let scope = if text("scope") == "type" { "Type" } else { "Instance" };
+        rows.push(
+            [cell(text("guid")), cell(named), cell(kind), cell(&ours.join("|")), cell(text("group")), cell(""), cell(scope), cell("yes")]
+                .join(","),
+        );
+    }
+    if rows.len() < 2 {
+        return 0;
+    }
+    let before = s.model.parameters.len();
+    let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let file = std::env::temp_dir().join(format!("bimcraft-template-parameters-{}-{unique}.csv", std::process::id()));
+    let written = std::fs::write(&file, rows.join("\n")).map_err(|e| e.to_string());
+    let reply = written.and_then(|()| s.execute("parameter_import", &json!({"path": file, "skip_conflicts": true})));
+    let _ = std::fs::remove_file(&file);
+    match reply {
+        Ok(reply) => {
+            for row in reply.get("rows").and_then(Value::as_array).into_iter().flatten() {
+                let who = row.get("name").and_then(Value::as_str).unwrap_or("");
+                match row.get("status").and_then(Value::as_str) {
+                    Some("conflict" | "skip") => notes.left_out("parameter", "it conflicts with one the project has", who),
+                    _ => {
+                        let own: Vec<&str> =
+                            row.get("notes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+                        if !own.is_empty() {
+                            let text: String = own.join("; ").chars().take(300).collect();
+                            said.push(format!("Parameter {who}: {text}"));
+                        }
+                    }
+                }
+            }
+            for left in reply.get("left_out").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).take(50) {
+                said.push(format!("Parameters: {}", left.chars().take(300).collect::<String>()));
+            }
+        }
+        Err(why) => notes.left_out("parameter", &why, "all of them"),
+    }
+    s.model.parameters.len().saturating_sub(before)
+}
+
 /// A fill pattern's params: its target and its lines, each with the fields the command knows; a solid one has no lines.
 fn fill_pattern(entry: &Value) -> Map<String, Value> {
     let mut p = picked(entry, &["target"]);
@@ -304,6 +488,7 @@ pub fn exchange_template_path(path: &Path) -> Result<Imported, String> {
         (levels(&mut s, &v, &mut notes), "level"),
         (phases(&mut s, &v, &mut notes), "phase"),
         (each(&mut s, &v, "line_patterns", "line_pattern", "line pattern", &mut notes, |e| picked(e, &["segments"])), "line pattern"),
+        (line_styles(&mut s, &v, &mut notes, &mut said), "line style"),
         (each(&mut s, &v, "fill_patterns", "fill_pattern", "fill pattern", &mut notes, fill_pattern), "fill pattern"),
         (
             each(&mut s, &v, "text_types", "text_type", "text type", &mut notes, |e| {
@@ -311,6 +496,30 @@ pub fn exchange_template_path(path: &Path) -> Result<Imported, String> {
             }),
             "text type",
         ),
+        (
+            each(&mut s, &v, "dimension_types", "dimension_type", "dimension type", &mut notes, |e| {
+                picked(
+                    e,
+                    &[
+                        "font",
+                        "text_size",
+                        "bold",
+                        "italic",
+                        "underline",
+                        "width_factor",
+                        "color",
+                        "line_pen",
+                        "text_offset",
+                        "witness_gap",
+                        "witness_extension",
+                        "line_extension",
+                    ],
+                )
+            }),
+            "dimension type",
+        ),
+        (object_styles(&mut s, &v, &mut notes), "object style"),
+        (parameters(&mut s, &v, &mut notes, &mut said), "parameter"),
         (families(&mut s, &v, folder, &mut notes, &mut said), "family"),
     ];
     let listed: Vec<String> = came.iter().map(|(n, what)| count(*n, what)).collect();
@@ -321,9 +530,9 @@ pub fn exchange_template_path(path: &Path) -> Result<Imported, String> {
     // What the bridge itself said it could not export.
     skipped.extend(entries(&v, "notes").filter_map(Value::as_str).take(100).map(|n| n.chars().take(500).collect::<String>()));
     skipped.push(
-        "The bridge does not export these yet, so the project has BIMCraft's own: view templates, filters, object styles, line \
-         styles and weights, dimension types, project and shared parameters, sheets and title blocks, and the views and \
-         elements of the model"
+        "The bridge does not export these yet, so the project has BIMCraft's own: view templates, filters, line weights \
+         (Revit's API does not give them), a dimension type's tick mark, sheets and title blocks, and the views and elements \
+         of the model"
             .into(),
     );
     // The commands kept the model checked; a last check stands behind what is handed on.

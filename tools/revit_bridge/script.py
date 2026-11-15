@@ -47,6 +47,22 @@ def same(a, b):
         return False
 
 
+def definition_kind(definition):
+    """BIMCraft's kind for a definition's data type, a public SpecTypeId; None for those told no further by it."""
+    try:
+        spec = definition.GetDataType()
+    except Exception:
+        return None
+    S = DB.SpecTypeId
+    for known, name in [(S.Length, "length"), (S.Area, "area"), (S.Volume, "volume"), (S.Angle, "angle"),
+                        (S.Number, "number"), (S.Int.Integer, "integer"), (S.Boolean.YesNo, "yesno"),
+                        (S.String.Text, "text"), (S.String.MultilineText, "text"), (S.String.Url, "url"),
+                        (S.Reference.Material, "material")]:
+        if same(spec, known):
+            return name
+    return None
+
+
 def kind(parameter):
     """BIMCraft's kind for a parameter's data type, a public SpecTypeId; `other` for those it has none for."""
     try:
@@ -77,8 +93,12 @@ def kind(parameter):
 
 def group(parameter):
     """The heading a parameter is listed under, a public GroupTypeId, as BIMCraft names its own."""
+    return definition_group(parameter.Definition)
+
+
+def definition_group(definition):
     try:
-        own = parameter.Definition.GetGroupTypeId()
+        own = definition.GetGroupTypeId()
     except Exception:
         return None
     G = DB.GroupTypeId
@@ -365,9 +385,125 @@ def text_types(document, notes):
     return found
 
 
+def colour(value):
+    """A Revit colour as [red, green, blue], or None where it holds none."""
+    try:
+        if value is not None and value.IsValid:
+            return [int(value.Red), int(value.Green), int(value.Blue)]
+    except Exception:
+        pass
+    return None
+
+
+def pen(category, style):
+    """A category's line weight where it is seen or cut, 1 to 16, or None where it has none."""
+    try:
+        weight = category.GetLineWeight(style)
+        return int(weight) if weight is not None else None
+    except Exception:
+        return None
+
+
+def line_styles(document, notes):
+    """Each line style, a subcategory of Lines: its pen, its colour and its line pattern's name."""
+    found = []
+    lines = document.Settings.Categories.get_Item(DB.BuiltInCategory.OST_Lines)
+    for style in lines.SubCategories:
+        try:
+            item = {"name": text(style.Name), "pen": pen(style, DB.GraphicsStyleType.Projection), "color": colour(style.LineColor)}
+            pattern = document.GetElement(style.GetLinePatternId(DB.GraphicsStyleType.Projection))
+            if isinstance(pattern, DB.LinePatternElement):
+                item["pattern"] = text(pattern.GetLinePattern().Name)
+            found.append(dict((key, value) for key, value in item.items() if value is not None))
+        except Exception as error:
+            notes.append("A line style was not exported: %s" % error)
+    return found
+
+
+def object_styles(document, notes):
+    """Each model category's pens, seen and cut, under its public BuiltInCategory name."""
+    found = []
+    for category in document.Settings.Categories:
+        try:
+            if category.CategoryType != DB.CategoryType.Model:
+                continue
+            item = {"category": text(category.BuiltInCategory),
+                    "projection": pen(category, DB.GraphicsStyleType.Projection), "cut": pen(category, DB.GraphicsStyleType.Cut)}
+            if item["projection"] is not None or item["cut"] is not None:
+                found.append(item)
+        except Exception as error:
+            notes.append("An object style was not exported: %s" % error)
+    return found
+
+
+def dimension_types(document, notes):
+    """Each dimension type's text and lines, lengths in mm on paper. Its tick mark is not read."""
+    P = DB.BuiltInParameter
+
+    def read(element, builtin, how):
+        parameter = element.get_Parameter(builtin)
+        if parameter is None or not parameter.HasValue:
+            return None
+        return how(parameter)
+
+    def length(element, builtin):
+        value = read(element, builtin, lambda p: p.AsDouble())
+        return tidy(value * 304.8) if value is not None else None
+
+    found = []
+    for element in DB.FilteredElementCollector(document).OfClass(DB.DimensionType):
+        try:
+            name = element_name(element)
+            if not name.strip():
+                continue
+            item = {"name": name, "font": read(element, P.TEXT_FONT, lambda p: text(p.AsString())),
+                    "text_size": length(element, P.TEXT_SIZE),
+                    "bold": read(element, P.TEXT_STYLE_BOLD, lambda p: p.AsInteger() == 1),
+                    "italic": read(element, P.TEXT_STYLE_ITALIC, lambda p: p.AsInteger() == 1),
+                    "underline": read(element, P.TEXT_STYLE_UNDERLINE, lambda p: p.AsInteger() == 1),
+                    "width_factor": read(element, P.TEXT_WIDTH_SCALE, lambda p: tidy(p.AsDouble())),
+                    "line_pen": read(element, P.LINE_PEN, lambda p: p.AsInteger()),
+                    "text_offset": length(element, P.TEXT_DIST_TO_LINE),
+                    "witness_gap": length(element, P.WITNS_LINE_GAP_TO_ELT),
+                    "witness_extension": length(element, P.DIM_WITNS_LINE_EXTENSION),
+                    "line_extension": length(element, P.DIM_LINE_EXTENSION)}
+            value = read(element, P.LINE_COLOR, lambda p: p.AsInteger())
+            if value is not None:
+                item["color"] = [value & 255, (value >> 8) & 255, (value >> 16) & 255]
+            found.append(dict((key, value) for key, value in item.items() if value is not None))
+        except Exception as error:
+            notes.append("Dimension type %s not exported: %s" % (element_id(element), error))
+    return found
+
+
+def project_parameters(document, notes):
+    """Each project parameter bound to categories: its kind, a shared one's GUID, instance or type, group, categories."""
+    found = []
+    iterator = document.ParameterBindings.ForwardIterator()
+    iterator.Reset()
+    while iterator.MoveNext():
+        try:
+            definition, binding = iterator.Key, iterator.Current
+            item = {"name": text(definition.Name), "kind": definition_kind(definition) or "other",
+                    "scope": "type" if isinstance(binding, DB.TypeBinding) else "instance",
+                    "group": definition_group(definition), "categories": []}
+            element = document.GetElement(definition.Id)
+            if isinstance(element, DB.SharedParameterElement):
+                item["guid"] = text(element.GuidValue)
+            for category in binding.Categories:
+                try:
+                    item["categories"].append(text(category.BuiltInCategory))
+                except Exception:
+                    pass
+            found.append(dict((key, value) for key, value in item.items() if value is not None))
+        except Exception as error:
+            notes.append("A project parameter was not exported: %s" % error)
+    return found
+
+
 def read_document(document, limit=None, progress=None):
     """What the bridge exports of a document: the family it is, or a project's (or a template's) levels, phases, line and
-    fill patterns and text types, and its loaded editable families
+    fill patterns, line styles, text and dimension types, object styles and project parameters, and its loaded editable families
     (the first `limit` of them, when given), each opened with EditFamily and closed unsaved. `progress(text)` hears of each."""
     snapshot = {"title": text(document.Title), "families": [], "levels": [], "notes": []}
     if document.IsFamilyDocument:
@@ -376,7 +512,9 @@ def read_document(document, limit=None, progress=None):
     snapshot["levels"] = [{"name": element_name(level), "elevation": tidy(level.ProjectElevation * 304.8)}
                           for level in DB.FilteredElementCollector(document).OfClass(DB.Level)]
     # The project's own settings, which make it a template: each read apart, so one that fails leaves the others.
-    for key, reader in [("line_patterns", line_patterns), ("fill_patterns", fill_patterns), ("text_types", text_types)]:
+    for key, reader in [("line_patterns", line_patterns), ("line_styles", line_styles), ("fill_patterns", fill_patterns),
+                        ("text_types", text_types), ("dimension_types", dimension_types), ("object_styles", object_styles),
+                        ("parameters", project_parameters)]:
         try:
             snapshot[key] = reader(document, snapshot["notes"])
         except Exception as error:
@@ -386,8 +524,9 @@ def read_document(document, limit=None, progress=None):
     except Exception as error:
         snapshot["notes"].append("phases not exported: %s" % error)
     if progress is not None:
-        progress("settings: %s levels, %s phases, %s line patterns, %s fill patterns, %s text types" % tuple(
-            len(snapshot.get(key, [])) for key in ("levels", "phases", "line_patterns", "fill_patterns", "text_types")))
+        progress("settings: " + ", ".join("%s %s" % (len(snapshot.get(key, [])), key) for key in (
+            "levels", "phases", "line_patterns", "line_styles", "fill_patterns", "text_types", "dimension_types",
+            "object_styles", "parameters")))
     families = list(DB.FilteredElementCollector(document).OfClass(DB.Family))
     for family in families:
         if not family.IsEditable or family.IsInPlace:

@@ -35,6 +35,11 @@ def office():
             "fill_patterns": [{"name": "Office Tile", "target": "model", "solid": False,
                                "lines": [{"angle": 90.0, "spacing": 600.0, "origin": [0.0, 0.0], "shift": 0.0, "dashes": [300.0, -300.0]}]}],
             "text_types": [{"name": "Office 2mm", "font": "Arial", "size": 2.0, "bold": True, "color": [200, 30, 30]}],
+            "line_styles": [{"name": "Office Demolished", "pen": 3, "color": [255, 0, 0], "pattern": "Office Chain"}],
+            "dimension_types": [{"name": "Office Dim", "font": "Arial", "text_size": 2.0, "line_pen": 2}],
+            "object_styles": [{"category": "OST_Walls", "projection": 2, "cut": 5}, {"category": "OST_Views", "projection": 1}],
+            "parameters": [{"name": "Fire Rating", "kind": "text", "guid": "7b1d2c3e-4f50-4a61-8b72-9c83ad94be05",
+                            "scope": "type", "categories": ["OST_Walls", "OST_Doors"]}],
             "notes": ["A nested family could not be read"]}
 
 
@@ -126,6 +131,8 @@ class BridgeTests(unittest.TestCase):
             self.assertTrue(opened["skipped"][0].startswith("Came in from the bridge's export: 2 levels, 2 phases, 1 line pattern"))
             self.assertIn("Office Chain", result.stdout)
             self.assertIn("Fit Out", result.stdout)
+            self.assertIn("1 line style", opened["skipped"][0])
+            self.assertIn("1 dimension type, 1 object style, 1 parameter and 1 family", opened["skipped"][0])
             started = subprocess.run([os.environ["BIMCRAFT_CLI"], "run", "--cmd", 'new {"template": %s}' % json.dumps(str(saved)),
                                       "--cmd", 'component {"family":"Socket","type":"Large","at":[0,0]}', "--cmd", "text_type {}"],
                                      capture_output=True, text=True, encoding="utf-8", check=True)
@@ -140,6 +147,10 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(template["fill_patterns"][0]["lines"][0]["dashes"], [300.0, -300.0])
         self.assertEqual(template["text_types"][0]["color"], [200, 30, 30])
         self.assertEqual(template["families"], ["families/0000_Socket.rfa.json"])
+        self.assertEqual(template["line_styles"][0]["pattern"], "Office Chain")
+        self.assertEqual(template["dimension_types"][0]["line_pen"], 2)
+        self.assertEqual([style["category"] for style in template["object_styles"]], ["OST_Walls", "OST_Views"])
+        self.assertEqual(template["parameters"][0]["guid"], "7b1d2c3e-4f50-4a61-8b72-9c83ad94be05")
         # What no file should hold is dropped with a note, and the rest stays.
         odd = office()
         odd["levels"].append({"name": "Sky", "elevation": math.inf})

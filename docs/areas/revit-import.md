@@ -157,9 +157,19 @@ came in (a phase's elements go `into` the first); with none, they keep their nam
 export's own folder (every component a plain name), else it is left out unread. What comes back is the `Imported` a Revit
 file's import gives, so the desktop opens it through the same hook (File > Open offers `.json` with a reader; `is_revit` takes
 `.rte.json` and `.rvt.json`) as an unsaved project with its report, to be saved as a `.bimt`, which New Project then offers;
-on the command line, `bimcraft-cli run Office.rte.json --save Office.bimt`. The last note lists what the bridge does not
-export yet: view templates, filters, object styles, line styles and weights, dimension types, project and shared
-parameters, sheets and title blocks. The script's readers of these settings have not been run inside Revit.
+on the command line, `bimcraft-cli run Office.rte.json --save Office.bimt`.
+
+The export also holds the line styles (the subcategories of Revit's Lines: pen, colour, pattern; one whose pattern did not
+come in is drawn solid and said), the dimension types (font, text size, style, width factor, colour, line pen, the text's
+offset and the witness lines' gap and extensions; the tick mark is not read), the object styles (each model category's pens
+seen and cut, one `object_styles` command a category) and the project parameters. A Revit category is its `BuiltInCategory`
+name, told by `template::category` as the one BIMCraft has (`OST_Walls` is `wall`, `OST_PipeCurves` is `pipe`); one it has
+none for leaves an object style out, and is dropped from a parameter with a note (a parameter left with none is left out).
+The parameters go through `parameter_import`, the import a table of them goes through: the reader writes the table to a file
+of its own in the temporary folder, runs the command with `skip_conflicts` and deletes the file, so a shared parameter keeps
+its GUID and two of one name are kept apart as that import keeps them. The last note lists what the bridge does not export
+yet: view templates, filters, line weights (Revit's API does not give them), sheets and title blocks. The script's readers
+of a template's settings have not been run inside Revit.
 
 ## Revit family library exchange and project templates (fork)
 

@@ -3,7 +3,8 @@
 This module has no dependency on Revit: script.py asks the API and hands a snapshot here. Each family becomes one
 `NNNN_name.rfa.json` file, format `bimcraft-revit-family` version 1, which BIMCraft reads (Insert > Revit Family, or
 `bimcraft-cli run project.bimc NNNN_name.rfa.json --save project.bimc`). A project or a template also becomes one
-`NAME.rte.json`, format `bimcraft-revit-template` version 1: its levels, phases, line and fill patterns and text types,
+`NAME.rte.json`, format `bimcraft-revit-template` version 1: its levels, phases, line and fill patterns, line styles,
+text and dimension types, object styles and project parameters,
 and the names of its families' files, which BIMCraft opens as a new project to save as a `.bimt`. BIMCraft, not this module, decides what a family
 there may hold: a parameter, a formula or a mesh its rules refuse is left out there, by name, in its import report.
 
@@ -154,7 +155,8 @@ def export_template(snapshot, families):
     """
     notes = [note for note in listed(snapshot, "notes") if isinstance(note, STRING_TYPES)]
     result = {"format": TEMPLATE_FORMAT, "version": TEMPLATE_VERSION, "name": name(snapshot.get("title", "Revit template")),
-              "levels": [], "phases": [], "line_patterns": [], "fill_patterns": [], "text_types": [],
+              "levels": [], "phases": [], "line_patterns": [], "line_styles": [], "fill_patterns": [], "text_types": [],
+              "dimension_types": [], "object_styles": [], "parameters": [],
               "families": list(families), "notes": notes}
     for level in listed(snapshot, "levels"):
         try:
@@ -164,11 +166,13 @@ def export_template(snapshot, families):
     for phase in listed(snapshot, "phases"):
         if isinstance(phase, STRING_TYPES) and phase.strip():
             result["phases"].append(phase.strip())
-    for key in ("line_patterns", "fill_patterns", "text_types"):
+    for key in ("line_patterns", "line_styles", "fill_patterns", "text_types", "dimension_types", "object_styles", "parameters"):
         for entry in listed(snapshot, key):
             try:
                 entry = dict(entry)
-                entry["name"] = name(entry["name"])
+                # An object style is told by its category; everything else by its name.
+                told = "category" if key == "object_styles" else "name"
+                entry[told] = name(entry[told])
                 # allow_nan=False refuses what JSON cannot hold, before anything is written.
                 json.dumps(entry, allow_nan=False)
                 result[key].append(entry)

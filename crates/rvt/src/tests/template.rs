@@ -97,11 +97,12 @@ fn a_template_from_the_bridge_comes_in_with_its_levels_phases_patterns_text_type
     // The notes: what came in, what the bridge said, and what a template holds that this does not bring yet.
     assert_eq!(
         read.skipped[0],
-        "Came in from the bridge's export: 3 levels, 3 phases, 2 line patterns, 3 fill patterns, 1 text type and 2 families"
+        "Came in from the bridge's export: 3 levels, 3 phases, 2 line patterns, 0 line styles, 3 fill patterns, 1 text type, \
+         0 dimension types, 0 object styles, 0 parameters and 2 families"
     );
     let all = read.skipped.join("\n");
     assert!(all.contains("Family Stair (in-place) is not exported"), "{all}");
-    for missing in ["view templates", "filters", "object styles", "dimension types", "parameters", "sheets", "title blocks"] {
+    for missing in ["view templates", "filters", "line weights", "sheets", "title blocks"] {
         assert!(all.contains(missing), "the notes name {missing}: {all}");
     }
     // Saved as a template and started from, it is a project like any other.
@@ -248,5 +249,121 @@ fn a_damaged_template_never_panics_and_what_comes_back_passes_the_models_rules()
         }
     }
     assert!(came_back > 50, "the sweep reaches the reader: {came_back}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The office's template with its line styles, object styles, dimension types and project parameters too.
+fn styled() -> Value {
+    let mut v = office();
+    v["line_styles"] = json!([
+        {"name": "Office Demolished", "pen": 3, "color": [255, 0, 0], "pattern": "Office Dash"},
+        {"name": "Office Axis", "pen": 1, "color": [0, 0, 0], "pattern": null},
+    ]);
+    v["object_styles"] = json!([
+        {"category": "OST_Walls", "projection": 2, "cut": 5},
+        {"category": "OST_Doors", "projection": 1, "cut": 3},
+        {"category": "OST_PipeCurves", "projection": 6, "cut": null},
+        {"category": "OST_Views", "projection": 1, "cut": 1},
+        {"category": "OST_Grids", "projection": 1, "cut": null},
+    ]);
+    v["dimension_types"] = json!([
+        {"name": "Office 2mm", "font": "Arial", "text_size": 2.0, "bold": false, "italic": true, "underline": false,
+         "width_factor": 0.8, "color": [0, 0, 200], "line_pen": 2, "text_offset": 1.2, "witness_gap": 1.0,
+         "witness_extension": 2.0, "line_extension": 0.5},
+    ]);
+    v["parameters"] = json!([
+        {"name": "Fire Rating", "kind": "text", "guid": "0f3c9a52-7d41-4e7a-9b1e-2c5d8e6f7a10", "scope": "type",
+         "group": "identity-data", "categories": ["OST_Walls", "OST_Doors"]},
+        {"name": "Clear Height", "kind": "length", "scope": "instance", "categories": ["OST_Rooms", "OST_Views"]},
+        {"name": "Sheet Issue", "kind": "text", "scope": "instance", "categories": ["OST_Sheets", "OST_Views"]},
+    ]);
+    v
+}
+
+#[test]
+fn line_styles_object_styles_dimension_types_and_project_parameters_come_in() {
+    let dir = dir("styled");
+    let read = crate::exchange_template_path(&bundle(&dir, &styled())).unwrap();
+    let m = &read.model;
+    m.check().unwrap();
+    // A line style: its pen, its colour and its pattern, which came in before it.
+    let demolished = serde_json::to_value(&m.line_styles["Office Demolished"]).unwrap();
+    assert_eq!((demolished["pen"].clone(), demolished["pattern"].clone()), (json!(3), json!("Office Dash")));
+    assert_eq!(demolished["color"], json!([255, 0, 0]));
+    assert!(m.line_styles.contains_key("Office Axis"));
+    // Object styles, each Revit category on the category BIMCraft has for it; one given no cut pen keeps its own.
+    let mut s = bimcraft_core::engine::Session::new();
+    s.reset(m.clone(), None);
+    let styles = s.execute("object_styles", &json!({})).unwrap();
+    let of = |category: &str| {
+        let row = styles["categories"].as_array().unwrap().iter().find(|c| c["category"] == category).unwrap().clone();
+        (row["projection"].as_u64().unwrap(), row["cut"].as_u64().unwrap())
+    };
+    assert_eq!((of("wall"), of("door")), ((2, 5), (1, 3)));
+    assert_eq!(of("pipe").0, 6);
+    assert_eq!(of("floor"), (4, 10), "a category the template says nothing of keeps what a project starts with");
+    // A dimension type's text and lines.
+    let dims = s.execute("dimension_type", &json!({})).unwrap().to_string();
+    assert!(dims.contains("Office 2mm"), "{dims}");
+    let office = serde_json::to_value(&m.dimension_types["Office 2mm"]).unwrap();
+    assert_eq!((office["text_size"].clone(), office["italic"].clone(), office["line_pen"].clone()), (json!(2.0), json!(true), json!(2)));
+    assert_eq!((office["width_factor"].clone(), office["witness_extension"].clone()), (json!(0.8), json!(2.0)));
+    // Project parameters: a shared one keeps its GUID, each is its kind and scope on the categories BIMCraft has.
+    let fire = serde_json::to_value(&m.parameters["Fire Rating"]).unwrap();
+    assert_eq!((fire["kind"].clone(), fire["scope"].clone()), (json!("text"), json!("type")));
+    assert_eq!(
+        m.library.guid(&bimcraft_core::library::Kind::Parameter, "Fire Rating").map(|g| g.to_string()).as_deref(),
+        Some("0f3c9a52-7d41-4e7a-9b1e-2c5d8e6f7a10")
+    );
+    let listed = s.execute("parameter_list", &json!({})).unwrap().to_string();
+    assert!(listed.contains("Fire Rating") && listed.contains("Clear Height"), "{listed}");
+    assert!(!m.parameters.contains_key("Sheet Issue"), "none of its categories is one a parameter here is for");
+    // The notes: what came in, and what had nowhere to go.
+    assert_eq!(
+        read.skipped[0],
+        "Came in from the bridge's export: 3 levels, 3 phases, 2 line patterns, 2 line styles, 3 fill patterns, 1 text type, \
+         1 dimension type, 3 object styles, 2 parameters and 2 families"
+    );
+    let all = read.skipped.join("\n");
+    assert!(read.skipped.iter().any(|n| n.starts_with("1 parameter left out, ") && n.contains("`Sheet Issue`")), "{all}");
+    assert!(read.skipped.iter().any(|n| n.starts_with("2 object styles left out, ") && n.contains("`OST_Views`")), "{all}");
+    assert!(all.contains("Clear Height") && all.contains("OST_Views"), "a category dropped from a parameter is said: {all}");
+    for done in ["object styles", "dimension types", "project and shared parameters"] {
+        assert!(!read.skipped.last().unwrap().contains(done), "{done} is exported now: {}", read.skipped.last().unwrap());
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn styles_and_parameters_a_command_refuses_are_left_out_by_name() {
+    let dir = dir("styled-refused");
+    let mut v = styled();
+    v["line_styles"].as_array_mut().unwrap().extend([
+        json!({"name": "Odd Pen", "pen": 99, "color": [0, 0, 0]}),
+        json!({"name": "Lost Pattern", "pen": 2, "color": [0, 0, 0], "pattern": "Nowhere"}),
+        json!({"name": 7}),
+    ]);
+    v["object_styles"].as_array_mut().unwrap().extend([json!({"category": "OST_Floors", "projection": 40, "cut": 2}), json!("x")]);
+    v["dimension_types"].as_array_mut().unwrap().push(json!({"name": "Huge", "text_size": 1.0e9}));
+    v["parameters"].as_array_mut().unwrap().extend([
+        json!({"name": "Fire Rating", "kind": "length", "scope": "instance", "categories": ["OST_Walls"]}),
+        json!({"name": "", "kind": "text", "categories": ["OST_Walls"]}),
+        json!({"name": "Odd\nName, \"quoted\"", "kind": "text", "guid": "not-a-guid", "categories": ["OST_Walls"]}),
+        json!(5),
+    ]);
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let m = &read.model;
+    m.check().unwrap();
+    let all = read.skipped.join("\n");
+    assert!(!m.line_styles.contains_key("Odd Pen"), "{all}");
+    assert!(read.skipped.iter().any(|n| n.starts_with("1 line style left out, ") && n.contains("`Odd Pen`")), "{all}");
+    // A style whose pattern did not come in is drawn solid, and said.
+    assert!(m.line_styles.contains_key("Lost Pattern"));
+    assert!(all.contains("Lost Pattern") && all.contains("Nowhere"), "{all}");
+    assert!(read.skipped.iter().any(|n| n.contains("left out") && n.contains("`OST_Floors`")), "{all}");
+    assert!(!m.dimension_types.contains_key("Huge") && m.dimension_types.contains_key("Office 2mm"));
+    // A second parameter of a name is kept apart, as the import of a table keeps it, and the first is as it was.
+    assert_eq!(serde_json::to_value(&m.parameters["Fire Rating"]).unwrap()["kind"], "text");
+    assert!(m.parameters.len() >= 2);
     let _ = std::fs::remove_dir_all(dir);
 }
