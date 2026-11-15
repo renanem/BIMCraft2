@@ -53,9 +53,9 @@ except NameError:
     TEXT_TYPE = str
 
 
-def name(value):
+def name(value, what="a name"):
     if not isinstance(value, STRING_TYPES) or not value.strip() or len(value) > 256:
-        raise ValueError("a name must contain 1 to 256 characters")
+        raise ValueError("%s must contain 1 to 256 characters" % what)
     return value.strip()
 
 
@@ -120,7 +120,7 @@ def export_family(source):
     seen = set()
     total = 0
     for item in types:
-        type_name = name(item["name"])
+        type_name = name(item["name"], "a type's name")
         if type_name in seen:
             raise ValueError("duplicate family type: " + type_name)
         seen.add(type_name)
@@ -136,7 +136,7 @@ def export_family(source):
                     raise ValueError("a vertex needs three coordinates")
                 for value in vertex:
                     number(value)
-        values = dict((name(key), scalar(value)) for key, value in item.get("values", {}).items())
+        values = dict((name(key, "a value's parameter name"), scalar(value)) for key, value in item.get("values", {}).items())
         result["types"].append({"name": type_name, "values": values, "triangles": triangles})
     return result
 
@@ -176,7 +176,9 @@ def export_template(snapshot, families):
                 told = {"object_styles": "category", "sheets": "number"}.get(key, "name")
                 entry[told] = name(entry[told])
                 # allow_nan=False refuses what JSON cannot hold, before anything is written.
-                json.dumps(entry, allow_nan=False)
+                # ensure_ascii=False as the file is written: IronPython 2's text is its `str`, which the ASCII encoder
+                # takes for bytes and fails to decode at the first accented letter.
+                json.dumps(entry, ensure_ascii=False, allow_nan=False)
                 result[key].append(entry)
             except (ValueError, KeyError, TypeError) as error:
                 notes.append("An entry of %s was not exported: %s" % (key, error))

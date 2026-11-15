@@ -69,6 +69,9 @@ impl Notes {
     fn left_out(&mut self, what: &'static str, why: &str, who: &str) {
         // A command's error opens with its name: the reason is what follows.
         let why = why.split_once(": ").filter(|(c, _)| !c.contains(' ')).map_or(why, |(_, rest)| rest);
+        // And some name the entry again (`line pattern `X`: a pattern needs…`): without it, entries left out for one
+        // reason are one note, however many they are.
+        let why = why.strip_prefix(&format!("{what} `{who}`")).map_or(why, |rest| rest.trim_start_matches(':').trim_start());
         let why: String = why.chars().take(220).collect();
         let who: String = who.chars().take(60).collect();
         match self.left.iter_mut().find(|(w, y, _)| *w == what && *y == why) {
@@ -394,6 +397,20 @@ fn once<'a>(names: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
     out
 }
 
+/// The field of BIMCraft's a built-in parameter of Revit's is, by the parameter's public `BuiltInParameter` name, which no
+/// language changes, and what turns its number from Revit's internal unit (feet) into the field's (millimetres): a run's
+/// system type is its `System`, its diameter and length are lengths, a family's and a type's names are `Family` and `Type`.
+fn builtin_field(builtin: &str) -> Option<(&'static str, Option<f64>)> {
+    match builtin {
+        "RBS_PIPING_SYSTEM_TYPE_PARAM" | "RBS_DUCT_SYSTEM_TYPE_PARAM" => Some(("System", None)),
+        "RBS_PIPE_DIAMETER_PARAM" => Some(("Diameter", Some(304.8))),
+        "CURVE_ELEM_LENGTH" => Some(("Length", Some(304.8))),
+        "SYMBOL_FAMILY_NAME_PARAM" | "ALL_MODEL_FAMILY_NAME" => Some(("Family", None)),
+        "SYMBOL_NAME_PARAM" | "ALL_MODEL_TYPE_NAME" => Some(("Type", None)),
+        _ => None,
+    }
+}
+
 /// The view filters: the elements of its categories that hold every rule. One whose rules are joined by OR, or compare a
 /// number in Revit's internal units, is left out: a filter here would pick other elements than Revit's does.
 fn view_filters(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<String>) -> usize {
@@ -410,7 +427,8 @@ fn view_filters(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<St
             continue;
         }
         let rules: Vec<&Value> = entries(entry, "rules").collect();
-        if rules.iter().any(|r| r.get("internal").and_then(Value::as_bool).unwrap_or(false)) {
+        let known = |r: &Value| r.get("builtin").and_then(Value::as_str).and_then(builtin_field);
+        if rules.iter().any(|r| r.get("internal").and_then(Value::as_bool).unwrap_or(false) && !matches!(known(r), Some((_, Some(_))))) {
             notes.left_out(WHAT, "a rule of it compares a number in Revit's internal units, which the bridge could not convert", named);
             continue;
         }
@@ -421,8 +439,33 @@ fn view_filters(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<St
             continue;
         }
         let dropped: Vec<&str> = given.iter().filter(|c| broad_category(c, true).is_none()).copied().collect();
-        let rules: Vec<Value> = rules.iter().map(|r| Value::Object(picked(r, &["field", "op", "value"]))).collect();
-        match s.execute("filter", &json!({"name": named, "categories": ours, "rules": rules})) {
+        let rules: Vec<Value> = rules
+            .iter()
+            .map(|r| {
+                let mut rule = picked(r, &["field", "op", "value"]);
+                if let Some((field, factor)) = known(r) {
+                    rule.insert("field".into(), json!(field));
+                    // A length in feet as the millimetres it is, to the thousandth a comparison for equality needs.
+                    if let (Some(factor), Some(feet)) = (factor, r.get("value").and_then(Value::as_f64)) {
+                        rule.insert("value".into(), json!((feet * factor * 1000.0).round() / 1000.0));
+                    }
+                }
+                Value::Object(rule)
+            })
+            .collect();
+        let mut done = s.execute("filter", &json!({"name": named, "categories": ours, "rules": rules}));
+        // What families make has fewer fields than a run: a filter by one of a run's is kept for the runs.
+        if let (Err(why), true) = (&done, ours.len() > 1 && ours.contains(&"component")) {
+            let runs: Vec<&str> = ours.iter().filter(|c| **c != "component").copied().collect();
+            if let Ok(out) = s.execute("filter", &json!({"name": named, "categories": runs, "rules": rules})) {
+                let why: String = why.chars().take(120).collect();
+                said.push(format!(
+                    "View filter {named} does not pick from `component` (fittings, accessories, fixtures, equipment): {why}"
+                ));
+                done = Ok(out);
+            }
+        }
+        match done {
             Ok(_) => {
                 made += 1;
                 if !dropped.is_empty() {
@@ -474,6 +517,15 @@ fn view_templates(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<
                 gone.push(filter);
             }
         }
+        // A template here applies so many filters: past that, those that hide what they pick are kept first, since
+        // the graphic overrides of the others do not come in and they change nothing shown.
+        let hides = |f: &Value| f.get("hidden").and_then(Value::as_bool).unwrap_or(false);
+        let mut over = 0;
+        if applied.len() > bimcraft_core::graphics::MAX_APPLIED {
+            applied.sort_by_key(|f| !hides(f));
+            over = applied.len() - bimcraft_core::graphics::MAX_APPLIED;
+            applied.truncate(bimcraft_core::graphics::MAX_APPLIED);
+        }
         if !applied.is_empty() {
             p.insert("filters".into(), json!(applied));
         }
@@ -496,6 +548,13 @@ fn view_templates(s: &mut Session, v: &Value, notes: &mut Notes, said: &mut Vec<
                         cut(&unhidden)
                     ));
                 }
+                if over > 0 {
+                    said.push(format!(
+                        "View template {named} applies {} more than the {} a template here holds: those were left, the ones that hide first kept",
+                        count(over, "filter"),
+                        bimcraft_core::graphics::MAX_APPLIED
+                    ));
+                }
                 if !gone.is_empty() {
                     said.push(format!("View template {named} does not apply these filters, which did not come in: {}", cut(&gone)));
                 }
@@ -511,7 +570,31 @@ fn title_blocks(s: &mut Session, v: &Value, notes: &mut Notes) -> usize {
     each(s, v, "title_blocks", "title_block", "title block", notes, |e| {
         let mut p = picked(e, &["width", "height"]);
         let lines: Vec<Value> = entries(e, "lines").map(|l| Value::Object(picked(l, &["points", "closed", "pen"]))).collect();
-        let texts: Vec<Value> = entries(e, "texts").map(|t| Value::Object(picked(t, &["at", "text", "size", "angle", "align"]))).collect();
+        // A text here is one line: a note of several (Revit breaks them with a carriage return) is a text for each, one
+        // under the other by a line and a half of its size, a blank line keeping its place.
+        let mut texts: Vec<Value> = Vec::new();
+        for t in entries(e, "texts") {
+            let whole = picked(t, &["at", "text", "size", "angle", "align"]);
+            let said = whole.get("text").and_then(Value::as_str).unwrap_or_default();
+            if !said.contains(['\r', '\n']) {
+                texts.push(Value::Object(whole));
+                continue;
+            }
+            let at = |i: usize| whole.get("at").and_then(|a| a.get(i)).and_then(Value::as_f64);
+            let (Some(x), Some(y), Some(size)) = (at(0), at(1), whole.get("size").and_then(Value::as_f64)) else {
+                texts.push(Value::Object(whole));
+                continue;
+            };
+            for (i, line) in said.replace("\r\n", "\n").split(['\r', '\n']).enumerate() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let mut one = whole.clone();
+                one.insert("text".into(), json!(line));
+                one.insert("at".into(), json!([x, y - i as f64 * 1.5 * size]));
+                texts.push(Value::Object(one));
+            }
+        }
         p.insert("lines".into(), Value::Array(lines));
         p.insert("texts".into(), Value::Array(texts));
         p

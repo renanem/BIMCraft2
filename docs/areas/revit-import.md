@@ -193,9 +193,19 @@ Sheets come in with number, name, the size of the title block placed on them and
 last note lists what is not exported: line weights (Revit's API does not give them), a dimension type's tick mark, a title
 block's labels, graphic overrides, a template's view range and phase filter, what a sheet places, and the model itself.
 
-The script's readers of a template's settings have not been run inside Revit. `tools/revit_bridge/headless.py` runs the
-bridge under `pyrevit run` without its dialogs, from a job file, and `check_export.py` loads what it wrote into BIMCraft
-and says what came in; [VERIFY.md](../../tools/revit_bridge/VERIFY.md) is the round they make.
+A rule on a built-in parameter carries its public `BuiltInParameter` name (`builtin`), which no language changes, beside
+the label Revit shows: `builtin_field` tells the few BIMCraft has a field for (a run's system type is `System`, a pipe's
+diameter and a run's length are lengths turned from feet, a family's and a type's names are `Family` and `Type`). A filter
+by a run's field that also picks what families make is kept for the runs, and the note says `component` is not picked. A
+view template that applies more filters than one holds here (`graphics::MAX_APPLIED`) keeps the ones that hide first, since
+the others' overrides do not come in, and says how many were left. A title block's note of several lines is a text for
+each line. Entries left out for one reason are one note.
+
+`tools/revit_bridge/headless.py` runs the bridge under `pyrevit run` without its dialogs, from a job file, and
+`check_export.py` loads what it wrote into BIMCraft and says what came in; [VERIFY.md](../../tools/revit_bridge/VERIFY.md)
+is the round they make, and holds what the round of 2026-11-15 in Revit 2027 found. Not covered by it: every family of a
+large template in one run (a heavy family takes minutes and the bundle is written only at the end), and the button's own
+dialogs.
 
 ## Revit family library exchange and project templates (fork)
 

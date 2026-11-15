@@ -16,8 +16,9 @@ Escreva o que exportar em `%TEMP%\bimcraft-bridge-job.json`:
 
 ```json
 {
+  "tools": "C:\\Dev\\Duall\\BIMCraft2-revit\\tools\\revit_bridge",
   "documents": [
-    "C:\\Users\\Meyer\\Desktop\\Template Hidráulica Duall-2025.rte",
+    "C:\\Users\\Meyer\\Documents\\Trabalho - Projetos\\Template Hidráulica Duall-2027 -NOVO limpo.rte",
     "C:\\Users\\Meyer\\Downloads\\Elétrica_selected_2026-08-18_03-19-51pm\\ELE-TIPO1.rvt",
     "C:\\ProgramData\\Autodesk\\RVT 2027\\Libraries\\English\\US\\Structural Precast\\Mounting Parts\\Solid Wall - Lifter.rfa"
   ],
@@ -26,6 +27,7 @@ Escreva o que exportar em `%TEMP%\bimcraft-bridge-job.json`:
 }
 ```
 
+- `tools`: a pasta onde estão `script.py` e `bridge.py`.
 - `documents`: templates (`.rte`), projetos (`.rvt`) e famílias (`.rfa`), em qualquer mistura. Um arquivo de versão
   anterior é convertido pelo Revit na abertura, em memória, o que demora.
 - `limit`: quantas famílias carregadas ler de cada projeto; `null` lê todas (cada uma é aberta com `EditFamily`, cerca de
@@ -38,7 +40,9 @@ pyrevit run "C:\Dev\Duall\BIMCraft2-revit\tools\revit_bridge\headless.py" --revi
 ```
 
 O andamento fica em `out\bridge.log`, linha a linha com o tempo. Se o Revit parar no meio, a última linha diz onde. Um
-erro antes de haver pasta de saída fica em `%TEMP%\bimcraft-bridge-job.json.error.txt`.
+erro antes de haver pasta de saída fica em `bimcraft-bridge-job.json.error.txt`, ao lado do arquivo de tarefa. O Revit dá
+a cada sessão uma pasta temporária própria (`%TEMP%\<guid>`): o script procura a tarefa nela e na pasta acima, que é o
+`%TEMP%` do usuário. O Revit leva cerca de dois minutos para subir antes da primeira linha do log.
 
 ## 2. Conferir no BIMCraft
 
@@ -74,9 +78,56 @@ Com o pyRevit carregado no Revit 2027, copie `script.py` e `bridge.py` para a pa
 clique em **BIMCraft → Exchange → Export**. Conferir: o diálogo de pasta, a recusa quando `BIMCraft-exchange` já existe, a
 mensagem final com a contagem, e que o pacote gravado é igual ao do passo 1 para o mesmo arquivo.
 
-## O que a rodada pode revelar
+## O que a rodada de 2026-11-15 mostrou
 
-Cada leitor do `script.py` foi escrito contra a referência da API do Revit 2027 e nunca executado, exceto a leitura de
-famílias. Na primeira execução da leitura de famílias apareceram três defeitos. O esperado é que apareçam outros: um nome
-de propriedade que a API expõe de outro jeito em IronPython, uma unidade, uma categoria. O `bridge.log` e as notas dizem
-onde; cada um se corrige no `script.py` e a rodada se repete.
+Rodou no Revit 2027 (27.0.4, pyRevit 6.4, IronPython 2.7.12) sobre o template de Hidráulica (263 MB, 558 famílias) e o
+`ELE-TIPO1.rvt` (194 MB), por `headless.py`, e o resultado foi carregado no BIMCraft por `check_export.py`.
+
+Defeitos achados e corrigidos:
+
+- `headless.py` não achava o arquivo de tarefa: o Revit dá a cada sessão um `%TEMP%\<guid>` próprio.
+- Nomes com acento eram recusados ao gravar (o `json` do IronPython 2 no modo ASCII): perdiam-se filtros, parâmetros,
+  preenchimentos, modelos de vista e carimbos.
+- O nome de tipos de texto e de cota não era lido (`Element.Name` escondido na subclasse), e o parâmetro da extensão da
+  linha de chamada tinha o nome errado (`WITNS_LINE_EXTENSION`).
+- Uma família sem tipo nomeado (tipo de nome em branco) era recusada: o tipo recebe o nome da família, como o Revit faz.
+- O passo negativo de um padrão de preenchimento era recusado: sai como passo positivo com o deslocamento invertido.
+- Regras de filtro sobre parâmetros internos vinham só com o nome traduzido: agora levam o nome público do
+  `BuiltInParameter`, e o BIMCraft liga tipo de sistema, diâmetro, comprimento, nome da família e do tipo aos seus campos.
+- Modelos de vista com mais de 32 filtros eram recusados inteiros: ficam os 32, os que ocultam primeiro.
+- Texto de várias linhas num carimbo era recusado: vira um texto por linha.
+- Centenas de notas iguais (padrões de linha de DWG sem segmentos) viram uma nota só.
+
+O que entrou, depois das correções:
+
+| | Template de Hidráulica | ELE-TIPO1 |
+|---|---|---|
+| Padrões de linha | 113 de 141 | 264 de 927 |
+| Estilos de linha | 51 de 51 | 137 de 137 |
+| Padrões de preenchimento | 214 de 238 | 122 de 125 |
+| Tipos de texto | 20 de 20 | 298 de 299 |
+| Tipos de cota | 43 de 43 | 31 de 31 |
+| Estilos de objeto | 36 de 137 | 36 de 157 |
+| Parâmetros de projeto | 169 de 275 | 21 de 148 |
+| Filtros de vista | 52 de 74 | 59 de 71 |
+| Modelos de vista | 31 de 31 | 26 de 26 |
+| Carimbos | 2 de 3 | 2 de 5 |
+| Folhas | 1 de 1 | 2 de 2 |
+| Famílias (limite pedido) | 45 de 45 | 20 de 20 |
+
+Os números do template são da rodada 4, conferidos com o leitor já corrigido. O que ficou de fora e por quê:
+
+- **Parâmetros de projeto**: os ligados só a folhas, vistas, níveis ou outras categorias sem parâmetros no BIMCraft
+  (103 no template; no ELE-TIPO1, 104, mais 21 em conflito de nome com um parâmetro que o projeto já tem).
+- **Filtros**: regras sobre Descrição, Fabricante, Comentários de tipo, Função e Tipo de serviço, que não são campos no
+  BIMCraft; regras unidas por OU; um filtro cuja regra aponta para um parâmetro que não existe mais.
+- **Filtros por sistema**: entram para os tubos; conexões, acessórios e peças não têm o campo `System`, e a nota diz.
+- **Carimbos** com mais de 1189 mm de largura (os de 1450 mm).
+- **Estilos de objeto** de categorias sem linha própria no BIMCraft (101 e 121).
+- **Padrões de preenchimento** vindos de DWG com origem a mais de 100 m da do padrão, e um com 397 famílias de linhas
+  (o limite é 256).
+- **Padrões de linha** importados de DWG sem segmentos, ou com segmento acima de 100 mm.
+
+Ainda não coberto: a exportação de **todas** as famílias de um template grande numa execução só. A rodada 3 leu 63 das
+558 em 23 minutos (famílias pesadas levam de 2 a 4 minutos cada) e foi interrompida; o pacote só é gravado no fim, então
+nada ficou. Falta gravar cada família ao lê-la e limitar o tempo gasto na geometria. O botão (passo 4) também não rodou.

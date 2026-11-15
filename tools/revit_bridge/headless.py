@@ -17,12 +17,16 @@ import io
 import json
 import os
 import re
+import sys
 import tempfile
 import time
 import traceback
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# Revit gives each session a temporary folder of its own, inside the user's: the job is looked for in both.
 JOB = os.path.join(tempfile.gettempdir(), "bimcraft-bridge-job.json")
+if not os.path.isfile(JOB):
+    JOB = os.path.join(os.path.dirname(tempfile.gettempdir().rstrip("\\/")), "bimcraft-bridge-job.json")
+HERE = [None]
 started = time.time()
 log_path = [None]
 
@@ -38,12 +42,19 @@ def run():
     from pyrevit import HOST_APP, DB
     with io.open(JOB, encoding="utf-8") as handle:
         job = json.load(handle)
+    # The runner does not always say where the script is: the job may ("tools"), and so may the script.
+    here = job.get("tools")
+    if not here:
+        here = os.path.dirname(os.path.abspath(__file__))
+    HERE[0] = here
+    if here not in sys.path:
+        sys.path.insert(0, here)
     out = job["out"]
     if not os.path.isdir(out):
         os.makedirs(out)
     log_path[0] = os.path.join(out, "bridge.log")
     say(u"Revit %s; job %s" % (HOST_APP.version, JOB))
-    exporter = imp.load_source("bimcraft_bridge_script", os.path.join(HERE, "script.py"))
+    exporter = imp.load_source("bimcraft_bridge_script", os.path.join(HERE[0], "script.py"))
     import bridge
     for path in job.get("documents", []):
         document = None
@@ -73,7 +84,10 @@ def run():
 
 try:
     run()
-except Exception:
-    # No log folder yet, or the job could not be read: said beside the job file.
-    with io.open(JOB + ".error.txt", "w", encoding="utf-8") as handle:
-        handle.write(u"%s" % traceback.format_exc())
+except BaseException:
+    # No log folder yet, or the job could not be read: said beside the job file, and in the log where there is one.
+    failure = traceback.format_exc()
+    handle = open(JOB + ".error.txt", "w")
+    handle.write(failure)
+    handle.close()
+    say(u"FAILED before the end: %s" % failure)

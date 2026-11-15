@@ -539,3 +539,101 @@ fn filters_and_templates_bimcraft_cannot_say_are_left_out_with_why() {
     assert_eq!(m.elements.values().filter(|e| matches!(e, Element::Sheet(_))).count(), 2, "the sheet numbered twice is left out");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// What the first run inside Revit showed: a filter of a hydraulic template is by the pipes' system type, which Revit
+/// shows by a localized name and applies to pipes and to what families make alike.
+#[test]
+fn a_filter_by_system_type_comes_in_by_the_parameters_public_name_for_the_runs_that_have_a_system() {
+    let dir = dir("system-filter");
+    let mut v = drawn();
+    v["filters"] = json!([
+        {"name": "ESGOTO COMUM", "categories": ["OST_PlaceHolderPipes", "OST_PipeFitting", "OST_PipeCurves", "OST_PlumbingFixtures"],
+         "logic": "and", "rules": [{"field": "Tipo de sistema", "builtin": "RBS_PIPING_SYSTEM_TYPE_PARAM", "op": "equals", "value": "ESGOTO COMUM"}]},
+        {"name": "Pipes 20", "categories": ["OST_PipeCurves"], "logic": "and",
+         "rules": [{"field": "Diâmetro", "builtin": "RBS_PIPE_DIAMETER_PARAM", "op": "equals", "value": 0.06561679790026247, "internal": true},
+                   {"field": "Comprimento", "builtin": "CURVE_ELEM_LENGTH", "op": "greater", "value": 1.0, "internal": true}]},
+        {"name": "Odd", "categories": ["OST_PipeCurves"], "logic": "and",
+         "rules": [{"field": "Coisa", "builtin": "SOMETHING_ELSE", "op": "equals", "value": "x"}]},
+    ]);
+    v["view_templates"] = json!([]);
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let m = &read.model;
+    m.check().unwrap();
+    let all = read.skipped.join("\n");
+    let filter = serde_json::to_value(&m.view_filters["ESGOTO COMUM"]).unwrap();
+    assert_eq!(filter["categories"], json!(["pipe"]), "{all}");
+    assert_eq!(filter["rules"][0]["field"], json!("System"), "{filter}");
+    assert_eq!(filter["rules"][0]["value"], json!("ESGOTO COMUM"));
+    assert!(
+        read.skipped.iter().any(|n| n.contains("ESGOTO COMUM") && n.contains("component") && n.contains("System")),
+        "the components it no longer picks are said: {all}"
+    );
+    let sized = serde_json::to_value(&m.view_filters["Pipes 20"]).unwrap();
+    assert_eq!(sized["rules"][0]["field"], json!("Diameter"), "{all}");
+    assert_eq!(sized["rules"][0]["value"], json!(20.0), "feet are millimetres here");
+    assert_eq!(sized["rules"][1], json!({"field": "Length", "op": "greater", "value": 304.8}), "{sized}");
+    assert!(!m.view_filters.contains_key("Odd"), "a built-in parameter BIMCraft has no field for is still the command's refusal");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A note of several lines in a title block (Revit breaks them with a carriage return) comes in as a text for each line,
+/// one under the other, since a title block's text here is one line.
+#[test]
+fn a_title_blocks_note_of_several_lines_comes_in_as_a_text_for_each_line() {
+    let dir = dir("title-lines");
+    let mut v = drawn();
+    v["sheets"] = json!([]);
+    v["title_blocks"] = json!([{"name": "Notes A3", "width": 420.0, "height": 297.0, "lines": [],
+        "texts": [{"at": [10.0, 200.0], "text": "GENERAL NOTES\rOpen the model\r\rSet the coordinates", "size": 5.0, "align": "left"}]}]);
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let all = read.skipped.join("\n");
+    let block = serde_json::to_value(&read.model.title_blocks["Notes A3"]).unwrap_or_else(|_| panic!("{all}"));
+    let texts = block["texts"].as_array().unwrap();
+    let said: Vec<&str> = texts.iter().map(|t| t["text"].as_str().unwrap()).collect();
+    assert_eq!(said, ["GENERAL NOTES", "Open the model", "Set the coordinates"], "{all}");
+    let ys: Vec<f64> = texts.iter().map(|t| t["at"][1].as_f64().unwrap()).collect();
+    assert_eq!(ys, [200.0, 192.5, 177.5], "each line a line and a half of its size lower, a blank one keeping its place");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A hydraulic template applies some fifty filters to a view, more than a template here holds.
+#[test]
+fn a_view_template_of_more_filters_than_one_holds_keeps_the_ones_that_hide_first() {
+    let dir = dir("many-filters");
+    let mut v = drawn();
+    let names: Vec<String> = (0..40).map(|i| format!("Filter {i}")).collect();
+    v["filters"] = names.iter().map(|n| json!({"name": n, "categories": ["OST_Walls"], "logic": "and", "rules": []})).collect();
+    let applied: Vec<Value> = names.iter().enumerate().map(|(i, n)| json!({"filter": n, "hidden": i >= 36})).collect();
+    v["view_templates"] = json!([{"name": "Busy Plan", "kind": "plan", "hide": [], "filters": applied}]);
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let all = read.skipped.join(
+        "
+",
+    );
+    read.model.check().unwrap();
+    assert!(read.model.view_templates.contains_key("Busy Plan"), "{all}");
+    let mut s = bimcraft_core::engine::Session::new();
+    s.reset(read.model.clone(), None);
+    let template = s.execute("template", &json!({"name": "Busy Plan"})).unwrap().to_string();
+    let kept = names.iter().filter(|n| template.contains(&format!("\"{n}\""))).count();
+    assert_eq!(kept, 32, "{template}");
+    for hiding in &names[36..] {
+        assert!(template.contains(&format!("\"{hiding}\"")), "every filter that hides is kept: {hiding} in {template}");
+    }
+    assert!(read.skipped.iter().any(|n| n.contains("Busy Plan") && n.contains("8 filters more")), "{all}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A project that imported drawings holds hundreds of line patterns with no segments: one note says them all.
+#[test]
+fn entries_left_out_for_one_reason_are_one_note() {
+    let dir = dir("one-note");
+    let mut v = office();
+    v["line_patterns"] =
+        json!([{"name": "IMPORT-A", "segments": []}, {"name": "IMPORT-B", "segments": []}, {"name": "IMPORT-C", "segments": []}]);
+    let read = crate::exchange_template_path(&bundle(&dir, &v)).unwrap();
+    let about: Vec<&String> = read.skipped.iter().filter(|n| n.contains("line pattern")).filter(|n| n.contains("left out")).collect();
+    assert_eq!(about.len(), 1, "{about:?}");
+    assert!(about[0].starts_with("3 line patterns left out, ") && about[0].contains("`IMPORT-A`, `IMPORT-B`, `IMPORT-C`"), "{about:?}");
+    let _ = std::fs::remove_dir_all(dir);
+}

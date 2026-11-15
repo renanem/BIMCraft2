@@ -283,7 +283,11 @@ def read_family(document, name=None):
             for current in types:
                 manager.CurrentType = current
                 document.Regenerate()
-                snapshot["types"].append({"name": text(current.Name), "values": values(current),
+                # A family that names no type has one of a blank name: loaded, Revit names it after the family.
+                type_name = text(current.Name)
+                if not type_name.strip():
+                    type_name = snapshot["name"]
+                snapshot["types"].append({"name": type_name, "values": values(current),
                                           "triangles": family_geometry(document)})
         else:
             snapshot["types"].append({"name": "Default", "values": {}, "triangles": family_geometry(document)})
@@ -302,7 +306,13 @@ def element_name(element):
     try:
         return text(element.Name)
     except Exception:
-        return text(DB.Element.Name.GetValue(element))
+        pass
+    try:
+        # IronPython's way to a property a subclass hides.
+        return text(DB.Element.Name.__get__(element))
+    except Exception:
+        # A type's name is also a parameter of it.
+        return text(element.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM).AsString())
 
 
 def phases(document):
@@ -337,8 +347,12 @@ def fill_patterns(document, notes):
             pattern = element.GetFillPattern()
             lines = []
             for grid in pattern.GetFillGrids():
-                line = {"angle": tidy(grid.Angle * 57.29577951308232), "spacing": tidy(grid.Offset * 304.8),
-                        "origin": [tidy(grid.Origin.U * 304.8), tidy(grid.Origin.V * 304.8)], "shift": tidy(grid.Shift * 304.8)}
+                # Revit steps to the next line on either side: a negative step with its shift is the same lines as the
+                # positive step with the shift turned, which is how BIMCraft says them.
+                turn = -1 if grid.Offset < 0 else 1
+                line = {"angle": tidy(grid.Angle * 57.29577951308232), "spacing": tidy(turn * grid.Offset * 304.8),
+                        "origin": [tidy(grid.Origin.U * 304.8), tidy(grid.Origin.V * 304.8)],
+                        "shift": tidy(turn * grid.Shift * 304.8)}
                 # Revit lists a dash, then a space, and so on: BIMCraft writes a space as a negative length.
                 dashes = [tidy(length * 304.8) * (1 if index % 2 == 0 else -1) for index, length in enumerate(grid.GetSegments())]
                 if dashes:
@@ -465,7 +479,7 @@ def dimension_types(document, notes):
                     "line_pen": read(element, P.LINE_PEN, lambda p: p.AsInteger()),
                     "text_offset": length(element, P.TEXT_DIST_TO_LINE),
                     "witness_gap": length(element, P.WITNS_LINE_GAP_TO_ELT),
-                    "witness_extension": length(element, P.DIM_WITNS_LINE_EXTENSION),
+                    "witness_extension": length(element, P.WITNS_LINE_EXTENSION),
                     "line_extension": length(element, P.DIM_LINE_EXTENSION)}
             value = read(element, P.LINE_COLOR, lambda p: p.AsInteger())
             if value is not None:
@@ -532,16 +546,18 @@ INVERTED = {"equals": "not-equals", "contains": "not-contains", "begins-with": "
 
 
 def rule_field(document, parameter_id):
-    """The name a rule's parameter is shown by, and its definition where it is a project or shared parameter."""
+    """The name a rule's parameter is shown by, its definition where it is a project or shared parameter, and its
+    public BuiltInParameter name where it is a built-in one."""
     element = document.GetElement(parameter_id)
     if element is not None:
         try:
-            return element_name(element), element.GetDefinition()
+            return element_name(element), element.GetDefinition(), None
         except Exception:
-            return element_name(element), None
+            return element_name(element), None, None
     import System
     builtin = System.Enum.ToObject(DB.BuiltInParameter, id_value(parameter_id))
-    return text(DB.LabelUtils.GetLabelFor(builtin)), None
+    # The label is in Revit's language; the enumeration's own name is the same in every one.
+    return text(DB.LabelUtils.GetLabelFor(builtin)), None, text(builtin)
 
 
 def filter_rule(document, rule):
@@ -550,8 +566,10 @@ def filter_rule(document, rule):
     if isinstance(rule, DB.FilterInverseRule):
         inverse = True
         rule = rule.GetInnerRule()
-    field, definition = rule_field(document, rule.GetRuleParameter())
+    field, definition, builtin = rule_field(document, rule.GetRuleParameter())
     item = {"field": field}
+    if builtin:
+        item["builtin"] = builtin
     if isinstance(rule, DB.HasValueFilterRule):
         item["op"] = "has-value"
     elif isinstance(rule, DB.HasNoValueFilterRule):
